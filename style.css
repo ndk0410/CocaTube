@@ -2009,6 +2009,148 @@ img {
     gap: 8px;
 }
 
+/* ===== NEW FEATURE: USER AUTHENTICATION & LOGIN UI ===== */
+
+.login-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.login-btn:hover {
+    background: var(--accent);
+    color: var(--text-primary);
+}
+
+.user-profile {
+    position: relative;
+    cursor: pointer;
+    margin-left: 8px;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid transparent;
+    transition: border var(--transition-fast);
+}
+
+.user-profile:hover .user-avatar {
+    border-color: var(--accent);
+}
+
+.user-dropdown {
+    position: absolute;
+    top: 48px;
+    right: 0;
+    background: var(--surface-variant);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+    min-width: 220px;
+    z-index: 200;
+    overflow: hidden;
+    animation: slideDown 0.2s ease;
+}
+
+.user-info {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.user-name {
+    font-weight: 500;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.user-email {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 16px;
+    text-align: left;
+    color: var(--text-primary);
+    transition: background var(--transition-fast);
+}
+
+.dropdown-item:hover {
+    background: var(--bg-hover);
+}
+
+.dropdown-item .material-icons-round {
+    font-size: 20px;
+    color: var(--text-secondary);
+}
+
+.login-modal-content {
+    max-width: 400px;
+}
+
+.login-desc {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.google-login-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px;
+    background: #ffffff;
+    color: #3c4043;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: background var(--transition-fast);
+}
+
+.google-login-btn img {
+    width: 18px;
+    height: 18px;
+}
+
+.google-login-btn:hover {
+    background: #f8f9fa;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 @media (max-width: 600px) {
     .playlist-grid {
         grid-template-columns: repeat(2, 1fr);

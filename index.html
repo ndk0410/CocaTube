@@ -52,6 +52,25 @@
             <button class="icon-btn mobile-search-btn" id="mobile-search-btn" aria-label="Search">
                 <span class="material-icons-round">search</span>
             </button>
+            
+            <!-- Auth Buttons -->
+            <button class="login-btn" id="header-login-btn">
+                <span class="material-icons-round">login</span>
+                <span class="login-text">Đăng nhập</span>
+            </button>
+            <div class="user-profile hidden" id="user-profile">
+                <img src="" alt="User avatar" class="user-avatar" id="user-avatar" referrerpolicy="no-referrer">
+                <div class="user-dropdown hidden" id="user-dropdown">
+                    <div class="user-info">
+                        <span class="user-name" id="user-name-display"></span>
+                        <span class="user-email" id="user-email-display"></span>
+                    </div>
+                    <button class="dropdown-item" id="logout-btn">
+                        <span class="material-icons-round">logout</span> Đăng xuất
+                    </button>
+                </div>
+            </div>
+
             <button class="icon-btn" id="settings-btn" aria-label="Settings">
                 <span class="material-icons-round">settings</span>
             </button>
@@ -251,7 +270,32 @@
     <!-- ====== TOAST NOTIFICATION ====== -->
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- ====== LOGIN MODAL ====== -->
+    <div class="modal-overlay hidden" id="login-modal">
+        <div class="modal-content login-modal-content">
+            <div class="modal-header">
+                <h2>Đăng nhập / Đăng ký</h2>
+                <button class="icon-btn close-modal-btn" id="close-login-modal">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="login-desc">Đăng nhập để lưu lại các danh sách phát và lịch sử nghe nhạc của bạn (Đồng bộ mọi thiết bị).</p>
+                <button class="google-login-btn" id="google-login-btn">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google Logo">
+                    <span>Đăng nhập qua Google</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
     <!-- Scripts -->
+    <script src="firebase-config.js"></script>
     <script src="api.js"></script>
     <script src="player.js"></script>
     <script src="app.js"></script>

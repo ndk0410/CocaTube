@@ -88,6 +88,18 @@ const App = (() => {
         dom.fsQueueBtn = $('fs-queue-btn');
         dom.fullscreenPlayerBtn = $('fullscreen-player-btn');
 
+        // Auth & User Profile
+        dom.headerLoginBtn = $('header-login-btn');
+        dom.userProfile = $('user-profile');
+        dom.userAvatar = $('user-avatar');
+        dom.userDropdown = $('user-dropdown');
+        dom.userNameDisplay = $('user-name-display');
+        dom.userEmailDisplay = $('user-email-display');
+        dom.logoutBtn = $('logout-btn');
+        dom.loginModal = $('login-modal');
+        dom.closeLoginModal = $('close-login-modal');
+        dom.googleLoginBtn = $('google-login-btn');
+
         // Toast
         dom.toastContainer = $('toast-container');
     }
@@ -243,6 +255,149 @@ const App = (() => {
                 dom.sidebar.classList.remove('open');
             }
         });
+
+        // ===== AUTHENTICATION EVENTS =====
+        dom.headerLoginBtn.addEventListener('click', () => {
+            dom.loginModal.classList.remove('hidden');
+        });
+
+        dom.closeLoginModal.addEventListener('click', () => {
+            dom.loginModal.classList.add('hidden');
+        });
+
+        dom.userAvatar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dom.userDropdown.classList.toggle('hidden');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!dom.userProfile.contains(e.target)) {
+                dom.userDropdown.classList.add('hidden');
+            }
+            if (e.target === dom.loginModal) {
+                dom.loginModal.classList.add('hidden');
+            }
+        });
+
+        dom.googleLoginBtn.addEventListener('click', handleGoogleLogin);
+        dom.logoutBtn.addEventListener('click', handleLogout);
+
+        // Initialize Firebase Auth Listener
+        initAuth();
+    }
+
+    // ===== AUTHENTICATION LOGIC =====
+
+    function initAuth() {
+        if (!window.firebaseAuth) {
+            console.warn('Firebase is not initialized');
+            return;
+        }
+
+        window.firebaseAuth.onAuthStateChanged(async (user) => {
+            if (user) {
+                // User is signed in
+                window.currentUser = user;
+                updateAuthUI(user);
+                dom.loginModal.classList.add('hidden');
+                
+                showToast(`Xin chào, ${user.displayName}`);
+                
+                // Trigger cloud sync
+                await syncDataFromCloud(user.uid);
+            } else {
+                // User is signed out
+                window.currentUser = null;
+                updateAuthUI(null);
+            }
+        });
+    }
+
+    async function syncDataFromCloud(uid) {
+        if (!window.firebaseDb) return;
+        
+        try {
+            const doc = await window.firebaseDb.collection('users').doc(uid).get();
+            if (doc.exists) {
+                const data = doc.data();
+                
+                // Hydrate local state from cloud
+                if (data.history) localStorage.setItem('music_history', JSON.stringify(data.history));
+                if (data.liked) localStorage.setItem('music_liked', JSON.stringify(data.liked));
+                if (data.playlists) localStorage.setItem('music_playlists', JSON.stringify(data.playlists));
+                
+                console.log('Cloud data synced to local storage successfully');
+                
+                // Refresh current page if needed
+                if (currentPage === 'library' || currentPage === 'liked' || currentPage === 'history' || currentPage === 'playlist') {
+                    navigateTo(currentPage);
+                }
+            } else {
+                // First time login - upload current local data to cloud
+                const history = JSON.parse(localStorage.getItem('music_history') || '[]');
+                const liked = JSON.parse(localStorage.getItem('music_liked') || '[]');
+                const playlists = JSON.parse(localStorage.getItem('music_playlists') || '[]');
+                
+                await window.firebaseDb.collection('users').doc(uid).set({
+                    history,
+                    liked,
+                    playlists,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log('Initial local data synced up to cloud');
+            }
+        } catch (error) {
+            console.error('Error syncing data from cloud:', error);
+            showToast('Không thể đồng bộ dữ liệu từ cloud');
+        }
+    }
+
+    async function handleGoogleLogin() {
+        if (!window.firebaseAuth) return;
+        
+        try {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            // Optional: Request specific scopes
+            // provider.addScope('profile');
+            // provider.addScope('email');
+            
+            showToast('Đang kết nối với Google...', 2000);
+            await window.firebaseAuth.signInWithPopup(provider);
+            // The onAuthStateChanged listener will handle the UI update
+        } catch (error) {
+            console.error('Login error:', error);
+            showToast(`Lỗi đăng nhập: ${error.message}`);
+        }
+    }
+
+    async function handleLogout() {
+        if (!window.firebaseAuth) return;
+        
+        try {
+            dom.userDropdown.classList.add('hidden');
+            await window.firebaseAuth.signOut();
+            showToast('Đã đăng xuất thành công');
+        } catch (error) {
+            console.error('Logout error:', error);
+            showToast('Lỗi khi đăng xuất');
+        }
+    }
+
+    function updateAuthUI(user) {
+        if (user) {
+            dom.headerLoginBtn.classList.add('hidden');
+            dom.userProfile.classList.remove('hidden');
+            
+            // Set user data
+            dom.userAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
+            dom.userNameDisplay.textContent = user.displayName || 'Người dùng';
+            dom.userEmailDisplay.textContent = user.email || '';
+        } else {
+            dom.headerLoginBtn.classList.remove('hidden');
+            dom.userProfile.classList.add('hidden');
+        }
     }
 
     // ===== SEARCH =====

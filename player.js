@@ -464,6 +464,7 @@ const MusicPlayer = (() => {
         // Limit to 100
         history = history.slice(0, 100);
         localStorage.setItem('music_history', JSON.stringify(history));
+        syncToCloud('history', history);
     }
 
     function getHistory() {
@@ -476,6 +477,7 @@ const MusicPlayer = (() => {
 
     function clearHistory() {
         localStorage.setItem('music_history', '[]');
+        syncToCloud('history', []);
     }
 
     // ===== LIKED SONGS =====
@@ -486,6 +488,7 @@ const MusicPlayer = (() => {
         if (idx >= 0) {
             liked.splice(idx, 1);
             localStorage.setItem('music_liked', JSON.stringify(liked));
+            syncToCloud('liked', liked);
             return false;
         } else {
             liked.unshift({
@@ -498,6 +501,7 @@ const MusicPlayer = (() => {
                 likedAt: Date.now()
             });
             localStorage.setItem('music_liked', JSON.stringify(liked));
+            syncToCloud('liked', liked);
             return true;
         }
     }
@@ -526,6 +530,7 @@ const MusicPlayer = (() => {
 
     function savePlaylists(playlists) {
         localStorage.setItem('music_playlists', JSON.stringify(playlists));
+        syncToCloud('playlists', playlists);
     }
 
     function createPlaylist(name) {
@@ -588,6 +593,21 @@ const MusicPlayer = (() => {
 
     function getPlaylist(playlistId) {
         return getPlaylists().find(p => p.id === playlistId) || null;
+    }
+
+    // ===== CLOUD SYNC =====
+
+    function syncToCloud(key, data) {
+        if (!window.currentUser || !window.firebaseDb) return;
+        
+        const uid = window.currentUser.uid;
+        const db = window.firebaseDb;
+        
+        db.collection('users').doc(uid).set({
+            [key]: data,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true })
+        .catch(err => console.error(`Error syncing ${key} to cloud:`, err));
     }
 
     // ===== PERSISTENCE =====
