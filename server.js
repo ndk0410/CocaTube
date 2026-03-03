@@ -8,8 +8,13 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-let ytsr;
-try { ytsr = require('ytsr'); } catch (e) { console.error('ytsr not installed. Run: npm install ytsr'); }
+let ytsr, ytpl;
+try { 
+    ytsr = require('ytsr'); 
+    ytpl = require('ytpl');
+} catch (e) { 
+    console.error('ytsr/ytpl not installed. Run: npm install ytsr ytpl'); 
+}
 
 const PORT = 3000;
 
@@ -148,6 +153,39 @@ async function handleSuggestions(query) {
     }
 }
 
+// Fetch Playlist by URL
+async function handlePlaylist(url) {
+    if (!ytpl) throw new Error('ytpl not available');
+
+    const cacheKey = `playlist:${url}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+
+    try {
+        const playlistId = await ytpl.getPlaylistID(url);
+        const playlist = await ytpl(playlistId, { limit: 100 });
+        
+        const data = {
+            id: playlist.id,
+            title: playlist.title,
+            author: playlist.author ? playlist.author.name : 'Unknown',
+            items: playlist.items.map(item => ({
+                id: item.id,
+                title: item.title,
+                artist: item.author ? item.author.name : 'Unknown',
+                duration: parseDuration(item.duration),
+                durationText: item.duration || '0:00',
+                thumbnail: item.bestThumbnail ? item.bestThumbnail.url : `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`,
+            }))
+        };
+
+        setCache(cacheKey, data);
+        return data;
+    } catch (e) {
+        throw new Error('Link playlist không hợp lệ hoặc playlist ở chế độ riêng tư');
+    }
+}
+
 // Parse duration string "3:45" or "1:02:30" to seconds
 function parseDuration(str) {
     if (!str) return 0;
@@ -189,6 +227,16 @@ async function handleApiRequest(req, res, parsedUrl) {
         } else if (pathname === '/api/suggestions') {
             const query = params.query || params.q || '';
             data = await handleSuggestions(query);
+
+        } else if (pathname === '/api/playlist') {
+            const url = params.url || '';
+            if (!url) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'Missing url parameter' }));
+                return;
+            }
+            data = await handlePlaylist(url);
+            console.log(`[API] Fetch Playlist → ${data.title} (${data.items.length} items)`);
 
         } else {
             res.writeHead(404);

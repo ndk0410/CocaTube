@@ -174,6 +174,19 @@ const MusicAPI = (() => {
         return search(queries[category] || category);
     }
 
+    // ===== IMPORT PLAYLIST =====
+
+    async function importPlaylist(url) {
+        if (!url || !url.trim()) return null;
+        try {
+            const data = await fetchJSON(`${API_BASE}/playlist?url=${encodeURIComponent(url.trim())}`);
+            return data;
+        } catch (e) {
+            console.error('Import playlist failed:', e);
+            throw new Error('Link không hợp lệ hoặc lỗi kết nối');
+        }
+    }
+
     // ===== PUBLIC API =====
 
     return {
@@ -186,6 +199,7 @@ const MusicAPI = (() => {
         getThumbnail,
         formatDuration,
         formatViews,
-        extractVideoId
+        extractVideoId,
+        importPlaylist
     };
 })();

@@ -484,6 +484,10 @@ const App = (() => {
                         <span class="material-icons-round">add</span>
                         <span>Tạo playlist mới</span>
                     </div>
+                    <div class="playlist-card create-playlist-card" data-action="import-playlist" style="background: rgba(255,0,0,0.1); border-color: rgba(255,0,0,0.2);">
+                        <span class="material-icons-round" style="color: #ff0000;">sync</span>
+                        <span style="color: #ff0000;">Nhập từ YouTube</span>
+                    </div>
                     ${playlists.map(pl => `
                         <div class="playlist-card" data-action="open-playlist" data-playlist-id="${pl.id}">
                             <div class="playlist-card-icon">
@@ -923,6 +927,35 @@ const App = (() => {
                     showToast(`Đã tạo playlist "${name}"`);
                     loadLibraryPage();
                 });
+                break;
+            }
+            case 'import-playlist': {
+                e.preventDefault();
+                showCreatePlaylistDialog(async (url) => {
+                    if (!url.includes('youtube.com') && !url.includes('youtu.be')) {
+                        showToast('Link không hợp lệ! Vui lòng nhập link YouTube');
+                        return;
+                    }
+                    showLoading();
+                    try {
+                        const data = await MusicAPI.importPlaylist(url);
+                        if (data && data.items && data.items.length > 0) {
+                            const plId = MusicPlayer.createPlaylist(data.title || 'Playlist nhập từ YouTube');
+                            let count = 0;
+                            data.items.forEach(track => {
+                                if (MusicPlayer.addToPlaylist(plId, track)) count++;
+                            });
+                            showToast(`Đã nhập thành công ${count} bài hát vào "${data.title}"`);
+                            loadLibraryPage();
+                        } else {
+                            showToast('Không tìm thấy bài hát nào trong playlist này');
+                        }
+                    } catch (err) {
+                        showToast(err.message || 'Lỗi khi nhập playlist');
+                    } finally {
+                        hideLoading();
+                    }
+                }, '', 'Dán link YouTube Playlist vào đây:');
                 break;
             }
             case 'open-playlist': {
