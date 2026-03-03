@@ -5,6 +5,15 @@
 
 const MusicPlayer = (() => {
     // ===== STATE =====
+    const INVIDIOUS_INSTANCES = [
+        'https://inv.tux.pizza',
+        'https://vid.priv.au',
+        'https://invidious.jing.rocks',
+        'https://invidious.nerdvpn.de',
+        'https://invidious.protokolla.fi'
+    ];
+    let currentInstanceIndex = 0;
+
     let audioElement = new Audio();
     let isReady = false;
     let isPlaying = false;
@@ -63,9 +72,22 @@ const MusicPlayer = (() => {
         });
 
         audioElement.addEventListener('error', (e) => {
-            console.error('Audio Player Error:', audioElement.error);
+            console.error('Audio Player Error on instance:', INVIDIOUS_INSTANCES[currentInstanceIndex]);
+            
+            // Try next instance before giving up
+            currentInstanceIndex++;
+            if (currentInstanceIndex < INVIDIOUS_INSTANCES.length && currentTrack) {
+                console.log(`Trying fallback instance: ${INVIDIOUS_INSTANCES[currentInstanceIndex]}`);
+                const audioUrl = `${INVIDIOUS_INSTANCES[currentInstanceIndex]}/latest_version?id=${currentTrack.id}&itag=140`;
+                audioElement.src = audioUrl;
+                audioElement.load();
+                audioElement.play().catch(err => console.error('Fallback play prevented:', err));
+                return;
+            }
+
+            // All instances failed, move to next track
+            currentInstanceIndex = 0; // Reset for next track
             onError(audioElement.error);
-            // Try next track on error
             if (queue.length > 1) {
                 setTimeout(() => next(), 1000);
             }
@@ -91,10 +113,12 @@ const MusicPlayer = (() => {
         if (!track || !track.id) return;
 
         currentTrack = track;
+        currentInstanceIndex = 0; // Reset instance index on new track
 
         if (isReady) {
-            // Source stream from backend
-            audioElement.src = `${window.location.origin}/api/stream?id=${track.id}`;
+            // Source stream from a public Invidious instance (itag=140 is m4a 128kbps audio only)
+            const audioUrl = `${INVIDIOUS_INSTANCES[currentInstanceIndex]}/latest_version?id=${track.id}&itag=140`;
+            audioElement.src = audioUrl;
             audioElement.load();
 
             if (autoplay) {

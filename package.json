@@ -12,7 +12,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "ytdl-core": "^4.11.5",
+    "@distube/ytdl-core": "^4.16.12",
+    "play-dl": "^1.9.7",
     "ytpl": "^2.3.0",
     "ytsr": "^3.8.4"
   }
