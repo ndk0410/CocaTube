@@ -8,12 +8,13 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-let ytsr, ytpl;
+let ytsr, ytpl, ytdl;
 try { 
     ytsr = require('ytsr'); 
     ytpl = require('ytpl');
+    ytdl = require('ytdl-core');
 } catch (e) { 
-    console.error('ytsr/ytpl not installed. Run: npm install ytsr ytpl'); 
+    console.error('ytsr/ytpl/ytdl-core not installed. Run: npm install ytsr ytpl ytdl-core'); 
 }
 
 const PORT = 3000;
@@ -200,10 +201,54 @@ function parseDuration(str) {
 async function handleApiRequest(req, res, parsedUrl) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-
     const pathname = parsedUrl.pathname;
     const params = parsedUrl.query || {};
+
+    // Special handling for audio streaming which doesn't return JSON
+    if (pathname === '/api/stream') {
+        const videoId = params.id;
+        if (!videoId) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Missing video id parameter' }));
+            return;
+        }
+        
+        if (!ytdl) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'ytdl-core not available' }));
+            return;
+        }
+
+        try {
+            // Tell the browser this is an audio stream, and support partial content blocks
+            res.setHeader('Content-Type', 'audio/webm');
+            
+            // Pipe the audio stream directly to the response
+            ytdl(`http://www.youtube.com/watch?v=${videoId}`, {
+                filter: 'audioonly',
+                quality: 'highestaudio',
+                highWaterMark: 1 << 25 // 32MB buffer
+            })
+            .on('error', (err) => {
+                console.error(`[STREAM ERROR] ${videoId}:`, err.message);
+                if (!res.headersSent) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: err.message }));
+                }
+            })
+            .pipe(res);
+            
+            console.log(`[API] Streaming audio for ${videoId}`);
+        } catch (err) {
+            console.error(`[STREAM SETUP ERROR] ${videoId}:`, err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return; // Don't continue to the JSON handler below
+    }
+
+    // Default JSON handler for other endpoints
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
     try {
         let data;
