@@ -5,16 +5,7 @@
 
 const MusicPlayer = (() => {
     // ===== STATE =====
-    const INVIDIOUS_INSTANCES = [
-        'https://inv.tux.pizza',
-        'https://vid.priv.au',
-        'https://invidious.jing.rocks',
-        'https://invidious.nerdvpn.de',
-        'https://invidious.protokolla.fi'
-    ];
-    let currentInstanceIndex = 0;
-
-    let audioElement = new Audio();
+    let ytPlayer = null;
     let isReady = false;
     let isPlaying = false;
 
@@ -48,62 +39,93 @@ const MusicPlayer = (() => {
         // Load saved state
         loadState();
 
-        // Setup HTML5 Audio Element
-        audioElement.volume = volume / 100;
-        
-        audioElement.addEventListener('play', () => {
-            isPlaying = true;
-            onStateChange({ playing: true, state: 1, track: currentTrack });
-            updateMediaSession();
-            startTimeUpdates();
-        });
+        // Load YouTube IFrame API
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(tag);
 
-        audioElement.addEventListener('pause', () => {
-            isPlaying = false;
-            onStateChange({ playing: false, state: 2, track: currentTrack });
-            updateMediaSession();
-            stopTimeUpdates();
-        });
-
-        audioElement.addEventListener('ended', () => {
-            isPlaying = false;
-            stopTimeUpdates();
-            handleTrackEnd();
-        });
-
-        audioElement.addEventListener('error', (e) => {
-            console.error('Audio Player Error on instance:', INVIDIOUS_INSTANCES[currentInstanceIndex]);
-            
-            // Try next instance before giving up
-            currentInstanceIndex++;
-            if (currentInstanceIndex < INVIDIOUS_INSTANCES.length && currentTrack) {
-                console.log(`Trying fallback instance: ${INVIDIOUS_INSTANCES[currentInstanceIndex]}`);
-                const audioUrl = `${INVIDIOUS_INSTANCES[currentInstanceIndex]}/latest_version?id=${currentTrack.id}&itag=140`;
-                audioElement.src = audioUrl;
-                audioElement.load();
-                audioElement.play().catch(err => console.error('Fallback play prevented:', err));
-                return;
+        // Setup global callback
+        window.onYouTubeIframeAPIReady = () => {
+            const container = document.getElementById('yt-player-container');
+            if (!container) {
+                // Re-create the container if we deleted it
+                const div = document.createElement('div');
+                div.id = 'yt-player-container';
+                div.style = 'position:fixed;bottom:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;';
+                div.innerHTML = '<div id="yt-player"></div>';
+                document.body.appendChild(div);
             }
 
-            // All instances failed, move to next track
-            currentInstanceIndex = 0; // Reset for next track
-            onError(audioElement.error);
-            if (queue.length > 1) {
-                setTimeout(() => next(), 1000);
-            }
-        });
+            ytPlayer = new YT.Player('yt-player', {
+                height: '1',
+                width: '1',
+                playerVars: {
+                    autoplay: 0,
+                    controls: 0,
+                    disablekb: 1,
+                    fs: 0,
+                    modestbranding: 1,
+                    rel: 0,
+                    showinfo: 0,
+                    origin: window.location.origin
+                },
+                events: {
+                    onReady: handlePlayerReady,
+                    onStateChange: handleStateChange,
+                    onError: handleError
+                }
+            });
+        };
+    }
 
-        audioElement.addEventListener('loadedmetadata', () => {
-            // Audio is ready to play
-        });
-
-        // Set ready state
+    function handlePlayerReady() {
         isReady = true;
+        ytPlayer.setVolume(volume);
         onReady();
 
         // Resume last track if saved
         if (currentTrack) {
             onTrackChange(currentTrack);
+        }
+    }
+
+    function handleStateChange(event) {
+        const state = event.data;
+
+        switch (state) {
+            case YT.PlayerState.PLAYING:
+                isPlaying = true;
+                startTimeUpdates();
+                break;
+            case YT.PlayerState.PAUSED:
+                isPlaying = false;
+                stopTimeUpdates();
+                break;
+            case YT.PlayerState.ENDED:
+                isPlaying = false;
+                stopTimeUpdates();
+                handleTrackEnd();
+                break;
+            case YT.PlayerState.BUFFERING:
+                break;
+        }
+
+        onStateChange({
+            playing: isPlaying,
+            state: state,
+            track: currentTrack
+        });
+
+        updateMediaSession();
+    }
+
+    function handleError(event) {
+        console.error('YouTube Player Error:', event.data);
+        onError(event.data);
+
+        // Try next track on error
+        if (queue.length > 1) {
+            setTimeout(() => next(), 1000);
         }
     }
 
@@ -113,16 +135,12 @@ const MusicPlayer = (() => {
         if (!track || !track.id) return;
 
         currentTrack = track;
-        currentInstanceIndex = 0; // Reset instance index on new track
 
-        if (isReady) {
-            // Source stream from a public Invidious instance (itag=140 is m4a 128kbps audio only)
-            const audioUrl = `${INVIDIOUS_INSTANCES[currentInstanceIndex]}/latest_version?id=${track.id}&itag=140`;
-            audioElement.src = audioUrl;
-            audioElement.load();
-
+        if (isReady && ytPlayer) {
             if (autoplay) {
-                audioElement.play().catch(e => console.error('Play prevented:', e));
+                ytPlayer.loadVideoById(track.id);
+            } else {
+                ytPlayer.cueVideoById(track.id);
             }
         }
 
@@ -133,7 +151,7 @@ const MusicPlayer = (() => {
     }
 
     function play() {
-        if (!isReady) return;
+        if (!isReady || !ytPlayer) return;
 
         if (!currentTrack && queue.length > 0) {
             currentIndex = 0;
@@ -141,12 +159,12 @@ const MusicPlayer = (() => {
             return;
         }
 
-        audioElement.play().catch(e => console.error('Play error:', e));
+        ytPlayer.playVideo();
     }
 
     function pause() {
-        if (!isReady) return;
-        audioElement.pause();
+        if (!isReady || !ytPlayer) return;
+        ytPlayer.pauseVideo();
     }
 
     function togglePlay() {
@@ -183,8 +201,8 @@ const MusicPlayer = (() => {
         if (queue.length === 0) return;
 
         // If more than 3 seconds in, restart current track
-        if (isReady && audioElement.currentTime > 3) {
-            audioElement.currentTime = 0;
+        if (isReady && ytPlayer && ytPlayer.getCurrentTime && ytPlayer.getCurrentTime() > 3) {
+            ytPlayer.seekTo(0);
             return;
         }
 
@@ -206,24 +224,20 @@ const MusicPlayer = (() => {
     }
 
     function seekTo(time) {
-        if (!isReady) return;
-        audioElement.currentTime = time;
+        if (!isReady || !ytPlayer) return;
+        ytPlayer.seekTo(time, true);
     }
 
     function seekToPercent(percent) {
-        if (!isReady) return;
-        let duration = audioElement.duration || 0;
-        // Fallback to track data if audio hasn't fully loaded metadata
-        if ((!duration || isNaN(duration) || duration === Infinity) && currentTrack) {
-            duration = currentTrack.duration || 0;
-        }
-        audioElement.currentTime = (percent / 100) * duration;
+        if (!isReady || !ytPlayer) return;
+        const duration = ytPlayer.getDuration() || 0;
+        seekTo((percent / 100) * duration);
     }
 
     function setVolume(vol) {
         volume = Math.max(0, Math.min(100, vol));
-        if (isReady) {
-            audioElement.volume = volume / 100;
+        if (isReady && ytPlayer) {
+            ytPlayer.setVolume(volume);
         }
         saveState();
     }
@@ -233,12 +247,16 @@ const MusicPlayer = (() => {
     }
 
     function toggleMute() {
-        if (!isReady) return;
-        audioElement.muted = !audioElement.muted;
+        if (!isReady || !ytPlayer) return;
+        if (ytPlayer.isMuted()) {
+            ytPlayer.unMute();
+        } else {
+            ytPlayer.mute();
+        }
     }
 
     function isMuted() {
-        return isReady && audioElement.muted;
+        return isReady && ytPlayer && ytPlayer.isMuted();
     }
 
     // ===== TRACK END HANDLING =====
@@ -259,12 +277,9 @@ const MusicPlayer = (() => {
     function startTimeUpdates() {
         stopTimeUpdates();
         timeUpdateInterval = setInterval(() => {
-            if (!isReady) return;
-            const current = audioElement.currentTime || 0;
-            let duration = audioElement.duration || 0;
-            if ((!duration || isNaN(duration) || duration === Infinity) && currentTrack) {
-                duration = currentTrack.duration || 0;
-            }
+            if (!isReady || !ytPlayer || !ytPlayer.getCurrentTime) return;
+            const current = ytPlayer.getCurrentTime() || 0;
+            const duration = ytPlayer.getDuration() || 0;
             onTimeUpdate({
                 current,
                 duration,
@@ -617,17 +632,13 @@ const MusicPlayer = (() => {
     }
 
     function getDuration() {
-        if (!isReady) return 0;
-        let duration = audioElement.duration || 0;
-        if ((!duration || isNaN(duration) || duration === Infinity) && currentTrack) {
-            duration = currentTrack.duration || 0;
-        }
-        return duration;
+        if (!isReady || !ytPlayer || !ytPlayer.getDuration) return 0;
+        return ytPlayer.getDuration();
     }
 
     function getCurrentTime() {
-        if (!isReady) return 0;
-        return audioElement.currentTime || 0;
+        if (!isReady || !ytPlayer || !ytPlayer.getCurrentTime) return 0;
+        return ytPlayer.getCurrentTime();
     }
 
     // ===== PUBLIC API =====
