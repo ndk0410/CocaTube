@@ -310,12 +310,14 @@ const App = (() => {
             dom.fsThumbnail.classList.add('video-mode-hidden');
             dom.ytPlayerContainer.classList.remove('video-mode-hidden');
             if (dom.fsArtwork) dom.fsArtwork.classList.add('video-mode-active');
+            if (dom.fullscreenPlayer) dom.fullscreenPlayer.classList.add('video-mode-active');
         } else {
             dom.fsModeVideoBtn.classList.remove('active');
             dom.fsModeSongBtn.classList.add('active');
             dom.ytPlayerContainer.classList.add('video-mode-hidden');
             dom.fsThumbnail.classList.remove('video-mode-hidden');
             if (dom.fsArtwork) dom.fsArtwork.classList.remove('video-mode-active');
+            if (dom.fullscreenPlayer) dom.fullscreenPlayer.classList.remove('video-mode-active');
         }
     }
 

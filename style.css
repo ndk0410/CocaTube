@@ -1161,8 +1161,13 @@ img {
     align-items: center;
     padding: 20px;
     transform: translateY(100%);
-    transition: transform var(--transition-slow);
+    transition: transform var(--transition-slow), padding var(--transition-normal);
     overflow-y: auto;
+}
+
+.fullscreen-player.video-mode-active {
+    padding: 20px 0 0 0;
+    /* Remove horizontal padding and bottom padding for edge-to-edge video */
 }
 
 .fullscreen-player.active {
@@ -1222,6 +1227,16 @@ img {
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
     position: relative;
     /* Added for absolute positioning of iframe */
+    transition: all var(--transition-normal);
+}
+
+.fs-artwork.video-mode-active {
+    max-width: 100vw;
+    width: 100vw;
+    aspect-ratio: 16 / 9;
+    border-radius: 0;
+    margin-bottom: 24px;
+    box-shadow: none;
 }
 
 .fs-thumbnail {
