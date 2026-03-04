@@ -2471,8 +2471,7 @@ img {
 .tiktok-card {
     scroll-snap-align: start;
     width: min(100%, 480px);
-    height: 100%;
-    min-height: 100%;
+    height: calc(100vh - var(--header-height) - var(--player-height) - 62px);
     position: relative;
     display: flex;
     align-items: center;
