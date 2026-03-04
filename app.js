@@ -563,25 +563,7 @@ const App = (() => {
                 `;
             }
 
-            // Trending section as cards
-            if (trendingData.length > 0) {
-                html += `
-                    <div class="section fade-in" style="animation-delay: 0.1s">
-                        <div class="section-header">
-                            <h2 class="section-title">Thịnh hành</h2>
-                        </div>
-                        <div style="margin-bottom: 16px;">
-                            <button class="chip active" id="play-all-trending">
-                                <span class="material-icons-round" style="font-size:16px;vertical-align:middle;margin-right:4px;">play_arrow</span>
-                                Phát tất cả
-                            </button>
-                        </div>
-                        <div class="song-list quick-picks-grid">
-                            ${trendingData.slice(0, 20).map((track, i) => renderSongRow(track, i)).join('')}
-                        </div>
-                    </div>
-                `;
-            }
+            // Trending section removed as per user request to avoid duplication with Quick Picks
 
             // Music Categories
             html += `
@@ -615,15 +597,6 @@ const App = (() => {
         } catch (e) {
             console.error('Failed to load home:', e);
             container.innerHTML = renderEmptyState('error', 'Không thể tải dữ liệu', 'Kiểm tra kết nối internet và thử lại');
-        }
-
-        const playAllTrendingBtn = $('play-all-trending');
-        if (playAllTrendingBtn) {
-            playAllTrendingBtn.addEventListener('click', () => {
-                isPlayingContextPlaylist = true;
-                MusicPlayer.playAll(trendingData.slice(0, 20));
-                showToast('Đang phát Thịnh hành');
-            });
         }
 
         hideLoading();
