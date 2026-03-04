@@ -1139,12 +1139,20 @@ const App = (() => {
             const res = await fetch(apiUrl);
             const json = await res.json();
 
-            if (!json.data || !json.data.videos || json.data.videos.length === 0) {
+            // TikWM returns data as direct array (trending) or data.videos (search)
+            let videos = [];
+            if (Array.isArray(json.data)) {
+                videos = json.data;
+            } else if (json.data && json.data.videos) {
+                videos = json.data.videos;
+            }
+
+            if (videos.length === 0) {
                 feedEl.innerHTML = '<div class="tiktok-empty"><span class="material-icons-round" style="font-size:48px;">videocam_off</span><p>Không tìm thấy video nào</p></div>';
                 return;
             }
 
-            tiktokFeedData = json.data.videos;
+            tiktokFeedData = videos;
             renderTikTokFeed(feedEl, tiktokFeedData);
         } catch (err) {
             console.error('TikTok API error:', err);
