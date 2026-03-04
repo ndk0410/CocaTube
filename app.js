@@ -347,6 +347,25 @@ const App = (() => {
         dom.googleLoginBtn.addEventListener('click', handleGoogleLogin);
         dom.logoutBtn.addEventListener('click', handleLogout);
 
+        // Settings Button
+        const settingsOverlay = $('settings-overlay');
+        const settingsBtn = $('settings-btn');
+        const closeSettingsBtn = $('close-settings');
+        if (settingsBtn && settingsOverlay) {
+            settingsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                settingsOverlay.classList.remove('hidden');
+            });
+        }
+        if (closeSettingsBtn && settingsOverlay) {
+            closeSettingsBtn.addEventListener('click', () => settingsOverlay.classList.add('hidden'));
+        }
+        if (settingsOverlay) {
+            settingsOverlay.addEventListener('click', (e) => {
+                if (e.target === settingsOverlay) settingsOverlay.classList.add('hidden');
+            });
+        }
+
         // Initialize Firebase Auth Listener
         initAuth();
     }
