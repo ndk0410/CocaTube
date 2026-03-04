@@ -366,6 +366,38 @@ const App = (() => {
             });
         }
 
+        // Theme toggle
+        const themeToggle = $('theme-toggle');
+        if (themeToggle) {
+            themeToggle.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    themeToggle.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    setTheme(btn.dataset.theme);
+                });
+            });
+        }
+
+        // Language selector
+        const langSelect = $('lang-select');
+        if (langSelect) {
+            langSelect.addEventListener('change', () => {
+                setLanguage(langSelect.value);
+            });
+        }
+
+        // Restore saved preferences immediately
+        const savedTheme = localStorage.getItem('coca_theme') || 'dark';
+        setTheme(savedTheme, false);
+        if (themeToggle) {
+            themeToggle.querySelectorAll('.theme-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.theme === savedTheme);
+            });
+        }
+        const savedLang = localStorage.getItem('coca_lang') || 'vi';
+        if (langSelect) langSelect.value = savedLang;
+        setLanguage(savedLang);
+
         // Initialize Firebase Auth Listener
         initAuth();
     }
@@ -2137,50 +2169,7 @@ window.__onGCastApiAvailable = function(isAvailable) {
     // ===== SETTINGS & THEME =====
 
     function initSettings() {
-        const settingsBtn = $('settings-btn');
-        const overlay = $('settings-overlay');
-        const closeBtn = $('close-settings');
-
-        if (settingsBtn && overlay) {
-            settingsBtn.addEventListener('click', () => overlay.classList.remove('hidden'));
-            closeBtn.addEventListener('click', () => overlay.classList.add('hidden'));
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) overlay.classList.add('hidden');
-            });
-        }
-
-        // Theme toggle
-        const themeToggle = $('theme-toggle');
-        if (themeToggle) {
-            themeToggle.querySelectorAll('.theme-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    themeToggle.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    setTheme(btn.dataset.theme);
-                });
-            });
-        }
-
-        // Language selector
-        const langSelect = $('lang-select');
-        if (langSelect) {
-            langSelect.addEventListener('change', () => {
-                setLanguage(langSelect.value);
-            });
-        }
-
-        // Restore saved preferences
-        const savedTheme = localStorage.getItem('coca_theme') || 'dark';
-        setTheme(savedTheme, false);
-        if (themeToggle) {
-            themeToggle.querySelectorAll('.theme-btn').forEach(b => {
-                b.classList.toggle('active', b.dataset.theme === savedTheme);
-            });
-        }
-
-        const savedLang = localStorage.getItem('coca_lang') || 'vi';
-        if (langSelect) langSelect.value = savedLang;
-        setLanguage(savedLang);
+        // Settings handlers are now in bindEvents() for guaranteed execution
     }
 
     function setTheme(theme, save = true) {
