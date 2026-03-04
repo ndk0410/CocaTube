@@ -659,6 +659,10 @@ const App = (() => {
     // ===== NAVIGATION =====
 
     function navigateTo(page, params) {
+        // Cleanup TikTok resources when leaving TikTok page
+        if (currentPage === 'tiktok' && page !== 'tiktok') {
+            cleanupTikTok();
+        }
         currentPage = page;
         updateNavActive(page);
 
@@ -1240,9 +1244,9 @@ const App = (() => {
     async function fetchTikTokVideos() {
         let apiUrl;
         if (tiktokSearchQuery) {
-            apiUrl = `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(tiktokSearchQuery)}&count=10&cursor=${tiktokCursor}`;
+            apiUrl = `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(tiktokSearchQuery)}&count=5&cursor=${tiktokCursor}`;
         } else {
-            apiUrl = `https://www.tikwm.com/api/feed/list?region=VN&count=10&cursor=${tiktokCursor}`;
+            apiUrl = `https://www.tikwm.com/api/feed/list?region=VN&count=5&cursor=${tiktokCursor}`;
         }
 
         const res = await fetch(apiUrl);
@@ -1265,21 +1269,31 @@ const App = (() => {
         // Disconnect old observer
         if (tiktokObserver) tiktokObserver.disconnect();
 
-        // Create IntersectionObserver for auto play/pause on scroll
+        // IntersectionObserver: lazy-load src + auto play/pause + unload far videos
         tiktokObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 const videoEl = entry.target.querySelector('video');
                 if (!videoEl) return;
+
                 if (entry.isIntersecting) {
+                    // Lazy-load: set src from data-src if not loaded yet
+                    if (!videoEl.src && videoEl.dataset.src) {
+                        videoEl.src = videoEl.dataset.src;
+                    }
                     videoEl.muted = false;
                     videoEl.play().catch(() => {});
                     entry.target.classList.remove('paused');
                 } else {
                     videoEl.pause();
                     entry.target.classList.add('paused');
+                    // Unload videos far from viewport to free memory
+                    if (videoEl.src && Math.abs(entry.boundingClientRect.top) > window.innerHeight * 3) {
+                        videoEl.removeAttribute('src');
+                        videoEl.load(); // reset the video element
+                    }
                 }
             });
-        }, { threshold: 0.6 });
+        }, { threshold: 0.3, rootMargin: '200px 0px' });
 
         videos.forEach((video, idx) => {
             const card = createTikTokCard(video, idx);
@@ -1311,8 +1325,9 @@ const App = (() => {
         const comments = formatTikTokCount(video.comment_count || 0);
         const shares = formatTikTokCount(video.share_count || 0);
 
+        // Use data-src for lazy loading instead of src
         card.innerHTML = `
-            <video src="${playUrl}" loop playsinline preload="metadata" muted></video>
+            <video data-src="${playUrl}" loop playsinline preload="none" muted></video>
             <span class="material-icons-round tiktok-play-overlay">play_arrow</span>
             <div class="tiktok-overlay">
                 <div class="tiktok-author">${author} <span style="font-weight:400;color:rgba(255,255,255,0.6);font-size:0.85rem;">${authorId}</span></div>
@@ -1330,6 +1345,10 @@ const App = (() => {
         card.addEventListener('click', (e) => {
             if (e.target.closest('.tiktok-action-btn')) return;
             if (videoEl.paused) {
+                // Lazy-load on tap too
+                if (!videoEl.src && videoEl.dataset.src) {
+                    videoEl.src = videoEl.dataset.src;
+                }
                 videoEl.muted = false;
                 videoEl.play();
                 card.classList.remove('paused');
@@ -1360,6 +1379,20 @@ const App = (() => {
         });
 
         return card;
+    }
+
+    // Cleanup TikTok resources when leaving the page
+    function cleanupTikTok() {
+        if (tiktokObserver) {
+            tiktokObserver.disconnect();
+            tiktokObserver = null;
+        }
+        // Stop and unload all TikTok videos
+        document.querySelectorAll('.tiktok-card video').forEach(v => {
+            v.pause();
+            v.removeAttribute('src');
+            v.load();
+        });
     }
 
     function formatTikTokCount(n) {
