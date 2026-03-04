@@ -1562,6 +1562,7 @@ img {
     .header {
         padding: 0 8px;
         gap: 4px;
+        justify-content: space-between;
     }
 
     .header-center {
@@ -1679,6 +1680,22 @@ img {
 
     .toast-container {
         bottom: calc(var(--player-height) + var(--mobile-nav-height) + 16px);
+    }
+
+    .login-text {
+        display: none;
+    }
+
+    .login-btn {
+        padding: 8px;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        justify-content: center;
+    }
+
+    .login-btn .material-icons-round {
+        margin: 0;
     }
 }
 
