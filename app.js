@@ -570,8 +570,14 @@ const App = (() => {
                         <div class="section-header">
                             <h2 class="section-title">Thịnh hành</h2>
                         </div>
-                        <div class="scroll-row">
-                            ${trendingData.slice(0, 20).map(track => renderMusicCard(track)).join('')}
+                        <div style="margin-bottom: 16px;">
+                            <button class="chip active" id="play-all-trending">
+                                <span class="material-icons-round" style="font-size:16px;vertical-align:middle;margin-right:4px;">play_arrow</span>
+                                Phát tất cả
+                            </button>
+                        </div>
+                        <div class="song-list quick-picks-grid">
+                            ${trendingData.slice(0, 20).map((track, i) => renderSongRow(track, i)).join('')}
                         </div>
                     </div>
                 `;
@@ -609,6 +615,15 @@ const App = (() => {
         } catch (e) {
             console.error('Failed to load home:', e);
             container.innerHTML = renderEmptyState('error', 'Không thể tải dữ liệu', 'Kiểm tra kết nối internet và thử lại');
+        }
+
+        const playAllTrendingBtn = $('play-all-trending');
+        if (playAllTrendingBtn) {
+            playAllTrendingBtn.addEventListener('click', () => {
+                isPlayingContextPlaylist = true;
+                MusicPlayer.playAll(trendingData.slice(0, 20));
+                showToast('Đang phát Thịnh hành');
+            });
         }
 
         hideLoading();
