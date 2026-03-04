@@ -2384,7 +2384,7 @@ img {
 .tiktok-page {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - var(--header-height) - var(--player-height) - 20px);
+    height: calc(100vh - var(--header-height) - var(--player-height));
     overflow: hidden;
 }
 
@@ -2470,8 +2470,10 @@ img {
 
 .tiktok-card {
     scroll-snap-align: start;
+    scroll-snap-stop: always;
     width: min(100%, 480px);
-    height: calc(100vh - var(--header-height) - var(--player-height) - 62px);
+    height: 100%;
+    min-height: 0;
     position: relative;
     display: flex;
     align-items: center;
@@ -2609,6 +2611,10 @@ img {
 }
 
 @media (max-width: 768px) {
+    .tiktok-page {
+        height: calc(100vh - var(--header-height) - var(--player-height) - var(--mobile-nav-height));
+    }
+
     .tiktok-card {
         width: 100%;
         border-radius: 0;

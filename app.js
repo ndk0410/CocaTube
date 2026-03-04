@@ -1059,6 +1059,9 @@ const App = (() => {
     let tiktokFeedData = [];
     let tiktokCurrentTab = 'trending';
     let tiktokObserver = null;
+    let tiktokLoading = false;
+    let tiktokCursor = 0;
+    let tiktokSearchQuery = '';
 
     async function loadTikTokPage() {
         const container = dom.pageContainer;
@@ -1095,6 +1098,9 @@ const App = (() => {
                     container.querySelector('#tiktok-search-input').focus();
                 } else {
                     searchBar.classList.remove('visible');
+                    tiktokSearchQuery = '';
+                    tiktokCursor = 0;
+                    tiktokFeedData = [];
                     loadTikTokFeed();
                 }
             });
@@ -1106,46 +1112,46 @@ const App = (() => {
         if (searchGoBtn) {
             searchGoBtn.addEventListener('click', () => {
                 const q = searchInput.value.trim();
-                if (q) loadTikTokFeed(q);
+                if (q) { tiktokSearchQuery = q; tiktokCursor = 0; tiktokFeedData = []; loadTikTokFeed(); }
             });
         }
         if (searchInput) {
             searchInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     const q = searchInput.value.trim();
-                    if (q) loadTikTokFeed(q);
+                    if (q) { tiktokSearchQuery = q; tiktokCursor = 0; tiktokFeedData = []; loadTikTokFeed(); }
+                }
+            });
+        }
+
+        // Infinite scroll
+        const feedEl = container.querySelector('#tiktok-feed');
+        if (feedEl) {
+            feedEl.addEventListener('scroll', () => {
+                if (tiktokLoading) return;
+                const scrollBottom = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight;
+                if (scrollBottom < feedEl.clientHeight * 2) {
+                    loadTikTokMore();
                 }
             });
         }
 
         hideLoading();
+        tiktokCursor = 0;
+        tiktokFeedData = [];
+        tiktokSearchQuery = '';
         loadTikTokFeed();
     }
 
-    async function loadTikTokFeed(searchQuery) {
+    async function loadTikTokFeed() {
         const feedEl = document.getElementById('tiktok-feed');
         if (!feedEl) return;
 
         feedEl.innerHTML = '<div class="tiktok-loading"><div class="spinner"></div><p>Đang tải...</p></div>';
+        tiktokLoading = true;
 
         try {
-            let apiUrl;
-            if (searchQuery) {
-                apiUrl = `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(searchQuery)}&count=20`;
-            } else {
-                apiUrl = `https://www.tikwm.com/api/feed/list?region=VN&count=20`;
-            }
-
-            const res = await fetch(apiUrl);
-            const json = await res.json();
-
-            // TikWM returns data as direct array (trending) or data.videos (search)
-            let videos = [];
-            if (Array.isArray(json.data)) {
-                videos = json.data;
-            } else if (json.data && json.data.videos) {
-                videos = json.data.videos;
-            }
+            const videos = await fetchTikTokVideos();
 
             if (videos.length === 0) {
                 feedEl.innerHTML = '<div class="tiktok-empty"><span class="material-icons-round" style="font-size:48px;">videocam_off</span><p>Không tìm thấy video nào</p></div>';
@@ -1157,7 +1163,48 @@ const App = (() => {
         } catch (err) {
             console.error('TikTok API error:', err);
             feedEl.innerHTML = '<div class="tiktok-empty"><span class="material-icons-round" style="font-size:48px;">error</span><p>Lỗi tải video TikTok. Vui lòng thử lại sau.</p></div>';
+        } finally {
+            tiktokLoading = false;
         }
+    }
+
+    async function loadTikTokMore() {
+        if (tiktokLoading) return;
+        tiktokLoading = true;
+        try {
+            const videos = await fetchTikTokVideos();
+            if (videos.length > 0) {
+                tiktokFeedData = tiktokFeedData.concat(videos);
+                const feedEl = document.getElementById('tiktok-feed');
+                if (feedEl) appendTikTokCards(feedEl, videos);
+            }
+        } catch (err) {
+            console.error('TikTok loadMore error:', err);
+        } finally {
+            tiktokLoading = false;
+        }
+    }
+
+    async function fetchTikTokVideos() {
+        let apiUrl;
+        if (tiktokSearchQuery) {
+            apiUrl = `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(tiktokSearchQuery)}&count=10&cursor=${tiktokCursor}`;
+        } else {
+            apiUrl = `https://www.tikwm.com/api/feed/list?region=VN&count=10&cursor=${tiktokCursor}`;
+        }
+
+        const res = await fetch(apiUrl);
+        const json = await res.json();
+
+        let videos = [];
+        if (Array.isArray(json.data)) {
+            videos = json.data;
+        } else if (json.data && json.data.videos) {
+            videos = json.data.videos;
+        }
+
+        tiktokCursor += videos.length;
+        return videos;
     }
 
     function renderTikTokFeed(feedEl, videos) {
@@ -1166,74 +1213,7 @@ const App = (() => {
         // Disconnect old observer
         if (tiktokObserver) tiktokObserver.disconnect();
 
-        videos.forEach((video, idx) => {
-            const card = document.createElement('div');
-            card.className = 'tiktok-card paused';
-            card.dataset.index = idx;
-
-            const playUrl = video.play || '';
-            const author = video.author ? (video.author.nickname || video.author.unique_id || 'Unknown') : 'Unknown';
-            const authorId = video.author ? ('@' + (video.author.unique_id || '')) : '';
-            const desc = video.title || '';
-            const musicTitle = video.music_info ? video.music_info.title : '';
-            const likes = formatTikTokCount(video.digg_count || 0);
-            const comments = formatTikTokCount(video.comment_count || 0);
-            const shares = formatTikTokCount(video.share_count || 0);
-
-            card.innerHTML = `
-                <video src="${playUrl}" loop playsinline preload="metadata" muted></video>
-                <span class="material-icons-round tiktok-play-overlay">play_arrow</span>
-                <div class="tiktok-overlay">
-                    <div class="tiktok-author">${author} <span style="font-weight:400;color:rgba(255,255,255,0.6);font-size:0.85rem;">${authorId}</span></div>
-                    <div class="tiktok-desc">${desc}</div>
-                    ${musicTitle ? `<div class="tiktok-music-tag"><span class="material-icons-round" style="font-size:14px;">music_note</span> ${musicTitle}</div>` : ''}
-                </div>
-                <div class="tiktok-actions">
-                    <button class="tiktok-action-btn" data-action="like"><span class="material-icons-round">favorite</span><span>${likes}</span></button>
-                    <button class="tiktok-action-btn" data-action="comment"><span class="material-icons-round">chat_bubble</span><span>${comments}</span></button>
-                    <button class="tiktok-action-btn" data-action="share"><span class="material-icons-round">share</span><span>${shares}</span></button>
-                </div>
-            `;
-
-            // Click to play/pause
-            const videoEl = card.querySelector('video');
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.tiktok-action-btn')) return;
-                if (videoEl.paused) {
-                    videoEl.muted = false;
-                    videoEl.play();
-                    card.classList.remove('paused');
-                } else {
-                    videoEl.pause();
-                    card.classList.add('paused');
-                }
-            });
-
-            // Action buttons
-            card.querySelectorAll('.tiktok-action-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const action = btn.dataset.action;
-                    if (action === 'like') {
-                        btn.classList.toggle('liked');
-                    } else if (action === 'share') {
-                        const shareUrl = `https://www.tiktok.com/@${video.author?.unique_id || ''}/video/${video.video_id || ''}`;
-                        if (navigator.share) {
-                            navigator.share({ title: desc, url: shareUrl });
-                        } else {
-                            navigator.clipboard.writeText(shareUrl);
-                            showToast('Đã sao chép liên kết!');
-                        }
-                    } else if (action === 'comment') {
-                        showToast('Tính năng bình luận chưa khả dụng');
-                    }
-                });
-            });
-
-            feedEl.appendChild(card);
-        });
-
-        // IntersectionObserver for auto play/pause on scroll
+        // Create IntersectionObserver for auto play/pause on scroll
         tiktokObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 const videoEl = entry.target.querySelector('video');
@@ -1249,9 +1229,85 @@ const App = (() => {
             });
         }, { threshold: 0.6 });
 
-        feedEl.querySelectorAll('.tiktok-card').forEach(card => {
+        videos.forEach((video, idx) => {
+            const card = createTikTokCard(video, idx);
+            feedEl.appendChild(card);
             tiktokObserver.observe(card);
         });
+    }
+
+    function appendTikTokCards(feedEl, videos) {
+        const startIdx = tiktokFeedData.length - videos.length;
+        videos.forEach((video, i) => {
+            const card = createTikTokCard(video, startIdx + i);
+            feedEl.appendChild(card);
+            if (tiktokObserver) tiktokObserver.observe(card);
+        });
+    }
+
+    function createTikTokCard(video, idx) {
+        const card = document.createElement('div');
+        card.className = 'tiktok-card paused';
+        card.dataset.index = idx;
+
+        const playUrl = video.play || '';
+        const author = video.author ? (video.author.nickname || video.author.unique_id || 'Unknown') : 'Unknown';
+        const authorId = video.author ? ('@' + (video.author.unique_id || '')) : '';
+        const desc = video.title || '';
+        const musicTitle = video.music_info ? video.music_info.title : '';
+        const likes = formatTikTokCount(video.digg_count || 0);
+        const comments = formatTikTokCount(video.comment_count || 0);
+        const shares = formatTikTokCount(video.share_count || 0);
+
+        card.innerHTML = `
+            <video src="${playUrl}" loop playsinline preload="metadata" muted></video>
+            <span class="material-icons-round tiktok-play-overlay">play_arrow</span>
+            <div class="tiktok-overlay">
+                <div class="tiktok-author">${author} <span style="font-weight:400;color:rgba(255,255,255,0.6);font-size:0.85rem;">${authorId}</span></div>
+                <div class="tiktok-desc">${desc}</div>
+                ${musicTitle ? `<div class="tiktok-music-tag"><span class="material-icons-round" style="font-size:14px;">music_note</span> ${musicTitle}</div>` : ''}
+            </div>
+            <div class="tiktok-actions">
+                <button class="tiktok-action-btn" data-action="like"><span class="material-icons-round">favorite</span><span>${likes}</span></button>
+                <button class="tiktok-action-btn" data-action="comment"><span class="material-icons-round">chat_bubble</span><span>${comments}</span></button>
+                <button class="tiktok-action-btn" data-action="share"><span class="material-icons-round">share</span><span>${shares}</span></button>
+            </div>
+        `;
+
+        const videoEl = card.querySelector('video');
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.tiktok-action-btn')) return;
+            if (videoEl.paused) {
+                videoEl.muted = false;
+                videoEl.play();
+                card.classList.remove('paused');
+            } else {
+                videoEl.pause();
+                card.classList.add('paused');
+            }
+        });
+
+        card.querySelectorAll('.tiktok-action-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                if (action === 'like') {
+                    btn.classList.toggle('liked');
+                } else if (action === 'share') {
+                    const shareUrl = `https://www.tiktok.com/@${video.author?.unique_id || ''}/video/${video.video_id || ''}`;
+                    if (navigator.share) {
+                        navigator.share({ title: desc, url: shareUrl });
+                    } else {
+                        navigator.clipboard.writeText(shareUrl);
+                        showToast('Đã sao chép liên kết!');
+                    }
+                } else if (action === 'comment') {
+                    showToast('Tính năng bình luận chưa khả dụng');
+                }
+            });
+        });
+
+        return card;
     }
 
     function formatTikTokCount(n) {
