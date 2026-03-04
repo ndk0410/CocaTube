@@ -380,6 +380,29 @@ const App = (() => {
         }
     }
 
+    // Callback from player.js when auto-switching modes (e.g., screen off)
+    // Only update UI, do NOT call MusicPlayer.setVideoMode to avoid circular loop
+    window.onVideoModeChange = function(isVideo) {
+        if (!dom.fsModeSongBtn || !dom.fsModeVideoBtn) return;
+        if (!dom.fsArtwork) dom.fsArtwork = document.querySelector('.fs-artwork');
+        
+        if (isVideo) {
+            dom.fsModeSongBtn.classList.remove('active');
+            dom.fsModeVideoBtn.classList.add('active');
+            if (dom.ytPlayerContainer) dom.ytPlayerContainer.classList.remove('video-mode-hidden');
+            if (dom.fsThumbnail) dom.fsThumbnail.classList.add('video-mode-hidden');
+            if (dom.fsArtwork) dom.fsArtwork.classList.add('video-mode-active');
+            if (dom.fullscreenPlayer) dom.fullscreenPlayer.classList.add('video-mode-active');
+        } else {
+            dom.fsModeVideoBtn.classList.remove('active');
+            dom.fsModeSongBtn.classList.add('active');
+            if (dom.ytPlayerContainer) dom.ytPlayerContainer.classList.add('video-mode-hidden');
+            if (dom.fsThumbnail) dom.fsThumbnail.classList.remove('video-mode-hidden');
+            if (dom.fsArtwork) dom.fsArtwork.classList.remove('video-mode-active');
+            if (dom.fullscreenPlayer) dom.fullscreenPlayer.classList.remove('video-mode-active');
+        }
+    };
+
     // ===== AUTHENTICATION LOGIC =====
 
     function initAuth() {

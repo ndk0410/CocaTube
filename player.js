@@ -49,6 +49,9 @@ const MusicPlayer = (() => {
         // Setup HTML5 Audio Player for background playback
         setupAudioPlayer();
 
+        // Auto-switch to Audio mode when screen is off for background playback
+        setupBackgroundAutoSwitch();
+
         // Load YouTube IFrame API
         const tag = document.createElement('script');
         tag.src = 'https://www.youtube.com/iframe_api';
@@ -131,6 +134,55 @@ const MusicPlayer = (() => {
         });
         
         // Let audioPlayer handle its own timeupdates if possible, or we continue using our setInterval
+    }
+
+    function setupBackgroundAutoSwitch() {
+        document.addEventListener('visibilitychange', () => {
+            if (!currentTrack || !audioPlayer) return;
+
+            if (document.hidden && isPlaying && isVideoMode) {
+                // Screen is off / app minimized while YouTube is playing
+                // → Switch to HTML5 Audio so music keeps playing in background
+                console.log('[BG] Screen off → switching to Audio mode');
+                
+                const currentMs = getCurrentTime();
+                isVideoMode = false;
+
+                // Pause YouTube, start Audio from same position
+                if (isReady && ytPlayer) ytPlayer.pauseVideo();
+                
+                if (audioPlayer.src && audioPlayer.src !== '') {
+                    if (isFinite(audioPlayer.duration)) audioPlayer.currentTime = currentMs;
+                    audioPlayer.play().catch(e => {
+                        console.warn('[BG] Audio play failed, reverting to YT:', e);
+                        isVideoMode = true;
+                        if (isReady && ytPlayer) ytPlayer.playVideo();
+                    });
+                } else {
+                    // Audio URL not yet loaded, fetch it now
+                    fetchAudioUrl(currentTrack.id).then(url => {
+                        if (url && !document.hidden) return; // User came back, abort
+                        if (url) {
+                            audioPlayer.src = url;
+                            audioPlayer.load();
+                            audioPlayer.currentTime = currentMs;
+                            audioPlayer.play().catch(() => {
+                                isVideoMode = true;
+                                if (isReady && ytPlayer) ytPlayer.playVideo();
+                            });
+                        } else {
+                            // Fallback: revert to YouTube
+                            isVideoMode = true;
+                            if (isReady && ytPlayer) ytPlayer.playVideo();
+                        }
+                    });
+                }
+
+                // Notify UI (app.js) to update toggle buttons
+                if (window.onVideoModeChange) window.onVideoModeChange(false);
+                startTimeUpdates();
+            }
+        });
     }
 
     function handlePlayerReady() {
