@@ -9,7 +9,7 @@ const MusicPlayer = (() => {
     let audioPlayer = null;
     let isReady = false;
     let isPlaying = false;
-    let isVideoMode = false; // False = Audio Mode (Background playable), True = Video Mode (YT IFrame)
+    let isVideoMode = true; // Default to YT IFrame (always works). Song mode uses HTML5 Audio for background play.
 
     let queue = [];
     let currentIndex = -1;
@@ -191,29 +191,53 @@ const MusicPlayer = (() => {
 
         currentTrack = track;
 
-        // Load into YouTube Player
+        // Always load into YouTube Player (primary player)
         if (isReady && ytPlayer) {
-            if (autoplay && isVideoMode) {
+            if (autoplay) {
                 ytPlayer.loadVideoById(track.id);
             } else {
-                // Just cue if we are going to play Audio background instead
                 ytPlayer.cueVideoById(track.id);
             }
         }
 
-        // Load into HTML5 Audio Player
+        // Pre-fetch audio URL for HTML5 Audio (background playback ready)
         if (audioPlayer) {
-            audioPlayer.src = `/api/stream?id=${track.id}`;
-            audioPlayer.load();
-            if (autoplay && !isVideoMode) {
-                audioPlayer.play().catch(e => console.error("Audio block:", e));
-            }
+            fetchAudioUrl(track.id).then(audioUrl => {
+                if (audioUrl && currentTrack && currentTrack.id === track.id) {
+                    audioPlayer.src = audioUrl;
+                    audioPlayer.load();
+                    // If we're in audio mode and should autoplay, start audio & pause YT
+                    if (autoplay && !isVideoMode) {
+                        if (isReady && ytPlayer) ytPlayer.pauseVideo();
+                        audioPlayer.play().catch(e => {
+                            console.warn('Audio autoplay blocked, falling back to YT:', e);
+                            // Fallback: switch to video mode
+                            isVideoMode = true;
+                            if (isReady && ytPlayer) ytPlayer.playVideo();
+                        });
+                    }
+                }
+            }).catch(err => {
+                console.warn('Audio URL fetch failed, using YT IFrame:', err);
+            });
         }
 
         onTrackChange(track);
         updateMediaSession();
         addToHistory(track);
         saveState();
+    }
+
+    async function fetchAudioUrl(videoId) {
+        try {
+            const res = await fetch(`/api/stream?id=${videoId}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            return data.url || null;
+        } catch (e) {
+            console.error('fetchAudioUrl error:', e);
+            return null;
+        }
     }
 
     function play() {

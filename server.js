@@ -8,13 +8,13 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-let ytsr, ytpl, playdl;
+let ytsr, ytpl, ytdl;
 try { 
     ytsr = require('ytsr'); 
     ytpl = require('ytpl');
-    playdl = require('play-dl');
+    ytdl = require('@distube/ytdl-core');
 } catch (e) { 
-    console.error('ytsr/ytpl/play-dl not installed. Run: npm install ytsr ytpl play-dl'); 
+    console.error('Dependencies not installed. Run: npm install ytsr ytpl @distube/ytdl-core'); 
 }
 
 const PORT = 3000;
@@ -204,7 +204,7 @@ async function handleApiRequest(req, res, parsedUrl) {
     const pathname = parsedUrl.pathname;
     const params = parsedUrl.query || {};
 
-    // Special handling for audio streaming which doesn't return JSON
+    // Special handling for audio URL extraction
     if (pathname === '/api/stream') {
         const videoId = params.id;
         if (!videoId) {
@@ -213,36 +213,59 @@ async function handleApiRequest(req, res, parsedUrl) {
             return;
         }
         
-        if (!playdl) {
+        if (!ytdl) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'play-dl not available' }));
+            res.end(JSON.stringify({ error: '@distube/ytdl-core not available' }));
+            return;
+        }
+
+        // Check cache first
+        const cacheKey = `stream:${videoId}`;
+        const cached = getCached(cacheKey);
+        if (cached) {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(cached));
             return;
         }
 
         try {
-            const url = `https://www.youtube.com/watch?v=${videoId}`;
-            const stream = await playdl.stream(url, { discordPlayerCompatibility: true });
+            const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            const info = await ytdl.getInfo(videoUrl);
             
-            res.setHeader('Content-Type', stream.type === 'webm' ? 'audio/webm' : 'audio/ogg');
+            // Pick the best audio-only format, preferring m4a/mp4 for iOS compatibility
+            const audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
             
-            stream.stream.on('error', (err) => {
-                console.error(`[STREAM ERROR] ${videoId}:`, err.message);
-                if (!res.headersSent) {
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: err.message }));
-                }
+            // Sort: prefer mp4/m4a over webm, then by bitrate
+            const sorted = audioFormats.sort((a, b) => {
+                const aIsMp4 = a.container === 'mp4' || a.container === 'm4a' ? 1 : 0;
+                const bIsMp4 = b.container === 'mp4' || b.container === 'm4a' ? 1 : 0;
+                if (aIsMp4 !== bIsMp4) return bIsMp4 - aIsMp4;
+                return (b.audioBitrate || 0) - (a.audioBitrate || 0);
             });
 
-            stream.stream.pipe(res);
-            console.log(`[API] Streaming audio for ${videoId}`);
+            const bestFormat = sorted[0];
+            if (!bestFormat || !bestFormat.url) {
+                throw new Error('No audio format found');
+            }
+
+            const result = { 
+                url: bestFormat.url, 
+                contentType: bestFormat.mimeType || 'audio/mp4',
+                duration: parseInt(info.videoDetails.lengthSeconds) || 0
+            };
+            setCache(cacheKey, result);
+            
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(result));
+            console.log(`[API] Audio URL for ${videoId} (${bestFormat.container}, ${bestFormat.audioBitrate}kbps)`);
         } catch (err) {
-            console.error(`[STREAM SETUP ERROR] ${videoId}:`, err.message);
+            console.error(`[STREAM ERROR] ${videoId}:`, err.message);
             if (!res.headersSent) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: err.message }));
             }
         }
-        return; // Don't continue to the JSON handler below
+        return;
     }
 
     // Default JSON handler for other endpoints
