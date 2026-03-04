@@ -28,6 +28,112 @@ const App = (() => {
         navigateTo('home');
     }
 
+    function initSettings() {
+        // Settings handlers are already in bindEvents()
+    }
+
+    function setTheme(theme, save = true) {
+        if (theme === 'light') {
+            document.body.classList.add('light-theme');
+        } else {
+            document.body.classList.remove('light-theme');
+        }
+        if (save) localStorage.setItem('coca_theme', theme);
+    }
+
+    const i18n = {
+        vi: {
+            settings_title: 'Cài đặt',
+            settings_theme: 'Giao diện',
+            settings_language: 'Ngôn ngữ',
+            theme_dark: 'Tối',
+            theme_light: 'Sáng',
+            nav_home: 'Trang chủ',
+            nav_explore: 'Khám phá',
+            nav_library: 'Thư viện',
+            nav_history: 'Lịch sử',
+            nav_liked: 'Đã thích',
+            search_placeholder: 'Tìm kiếm bài hát, nghệ sĩ...',
+            login_btn: 'Đăng nhập',
+            logout_btn: 'Đăng xuất',
+            login_title: 'Đăng nhập / Đăng ký',
+        },
+        en: {
+            settings_title: 'Settings',
+            settings_theme: 'Theme',
+            settings_language: 'Language',
+            theme_dark: 'Dark',
+            theme_light: 'Light',
+            nav_home: 'Home',
+            nav_explore: 'Explore',
+            nav_library: 'Library',
+            nav_history: 'History',
+            nav_liked: 'Liked',
+            search_placeholder: 'Search songs, artists...',
+            login_btn: 'Sign in',
+            logout_btn: 'Sign out',
+            login_title: 'Sign in / Register',
+        },
+        zh: {
+            settings_title: '设置',
+            settings_theme: '主题',
+            settings_language: '语言',
+            theme_dark: '深色',
+            theme_light: '浅色',
+            nav_home: '首页',
+            nav_explore: '探索',
+            nav_library: '音乐库',
+            nav_history: '历史',
+            nav_liked: '已喜欢',
+            search_placeholder: '搜索歌曲、艺术家...',
+            login_btn: '登录',
+            logout_btn: '退出',
+            login_title: '登录 / 注册',
+        }
+    };
+
+    function setLanguage(lang) {
+        const strings = i18n[lang] || i18n['vi'];
+        localStorage.setItem('coca_lang', lang);
+
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.dataset.i18n;
+            if (strings[key]) el.textContent = strings[key];
+        });
+
+        const navMap = {
+            'nav-home': strings.nav_home,
+            'nav-explore': strings.nav_explore,
+            'nav-library': strings.nav_library,
+            'nav-history': strings.nav_history,
+            'nav-liked': strings.nav_liked,
+            'mnav-home': strings.nav_home,
+            'mnav-explore': strings.nav_explore,
+            'mnav-library': strings.nav_library,
+        };
+        for (const [id, text] of Object.entries(navMap)) {
+            const el = $(id);
+            if (el) {
+                const label = el.querySelector('.sidebar-label, .mobile-nav-label');
+                if (label) label.textContent = text;
+            }
+        }
+
+        if (dom.searchInput) dom.searchInput.placeholder = strings.search_placeholder;
+        const loginText = document.querySelector('#header-login-btn .login-text');
+        if (loginText) loginText.textContent = strings.login_btn;
+        const loginTitle = document.querySelector('.login-modal-content .modal-header h2');
+        if (loginTitle) loginTitle.textContent = strings.login_title;
+
+        const logoutBtn = $('logout-btn');
+        if (logoutBtn) {
+            const icon = logoutBtn.querySelector('.material-icons-round');
+            logoutBtn.textContent = '';
+            if (icon) logoutBtn.appendChild(icon);
+            logoutBtn.append(' ' + strings.logout_btn);
+        }
+    }
+
     function cacheDom() {
         // Header
         dom.header = $('header');
@@ -284,20 +390,20 @@ const App = (() => {
         if(dom.fsModeSongBtn) dom.fsModeSongBtn.addEventListener('click', () => setVideoMode(false));
         if(dom.fsModeVideoBtn) dom.fsModeVideoBtn.addEventListener('click', () => setVideoMode(true));
         
-        dom.fsPlayBtn.addEventListener('click', () => MusicPlayer.togglePlay());
-        dom.fsPrevBtn.addEventListener('click', () => MusicPlayer.previous());
-        dom.fsNextBtn.addEventListener('click', () => MusicPlayer.next());
-        dom.fsShuffleBtn.addEventListener('click', () => {
+        if(dom.fsPlayBtn) dom.fsPlayBtn.addEventListener('click', () => MusicPlayer.togglePlay());
+        if(dom.fsPrevBtn) dom.fsPrevBtn.addEventListener('click', () => MusicPlayer.previous());
+        if(dom.fsNextBtn) dom.fsNextBtn.addEventListener('click', () => MusicPlayer.next());
+        if(dom.fsShuffleBtn) dom.fsShuffleBtn.addEventListener('click', () => {
             const mode = MusicPlayer.toggleShuffle();
             dom.shuffleBtn.classList.toggle('active', mode);
             dom.fsShuffleBtn.classList.toggle('active', mode);
         });
-        dom.fsRepeatBtn.addEventListener('click', handleRepeatToggle);
-        dom.fsProgressBar.addEventListener('input', (e) => {
+        if(dom.fsRepeatBtn) dom.fsRepeatBtn.addEventListener('click', handleRepeatToggle);
+        if(dom.fsProgressBar) dom.fsProgressBar.addEventListener('input', (e) => {
             MusicPlayer.seekToPercent(parseFloat(e.target.value));
         });
-        dom.fsLikeBtn.addEventListener('click', handleLikeToggle);
-        dom.fsQueueBtn.addEventListener('click', () => {
+        if(dom.fsLikeBtn) dom.fsLikeBtn.addEventListener('click', handleLikeToggle);
+        if(dom.fsQueueBtn) dom.fsQueueBtn.addEventListener('click', () => {
             closeFullscreenPlayer();
             setTimeout(toggleQueue, 300);
         });
@@ -1105,10 +1211,7 @@ const App = (() => {
 
     // ===== TIKTOK PAGE =====
 
-    let tiktokFeedData = [];
-    let tiktokCurrentTab = 'trending';
-    let tiktokObserver = null;
-    let tiktokLoading = false;
+
 
 
     // ===== SEARCH RESULTS RENDERER =====
@@ -1884,7 +1987,6 @@ const App = (() => {
                   .replace(/"/g, '&quot;')
                   .replace(/'/g, '&#039;');
     }
-
     function escapeAttr(str) {
         if (!str) return '';
         return str.replace(/&/g, '&amp;')
@@ -1893,6 +1995,8 @@ const App = (() => {
                   .replace(/</g, '&lt;')
                   .replace(/>/g, '&gt;');
     }
+
+
 
     // ===== PUBLIC API =====
 
@@ -1907,129 +2011,6 @@ window.__onGCastApiAvailable = function(isAvailable) {
             autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
         });
         console.log('Google Cast initialized');
-    }
-
-    // ===== SETTINGS & THEME =====
-
-    function initSettings() {
-        // Settings handlers are now in bindEvents() for guaranteed execution
-    }
-
-    function setTheme(theme, save = true) {
-        if (theme === 'light') {
-            document.body.classList.add('light-theme');
-        } else {
-            document.body.classList.remove('light-theme');
-        }
-        if (save) localStorage.setItem('coca_theme', theme);
-    }
-
-    // ===== I18N (Internationalization) =====
-
-    const i18n = {
-        vi: {
-            settings_title: 'Cài đặt',
-            settings_theme: 'Giao diện',
-            settings_language: 'Ngôn ngữ',
-            theme_dark: 'Tối',
-            theme_light: 'Sáng',
-            nav_home: 'Trang chủ',
-            nav_explore: 'Khám phá',
-            nav_tiktok: 'TikTok',
-            nav_library: 'Thư viện',
-            nav_history: 'Lịch sử',
-            nav_liked: 'Đã thích',
-            search_placeholder: 'Tìm kiếm bài hát, nghệ sĩ...',
-            login_btn: 'Đăng nhập',
-            logout_btn: 'Đăng xuất',
-            login_title: 'Đăng nhập / Đăng ký',
-        },
-        en: {
-            settings_title: 'Settings',
-            settings_theme: 'Theme',
-            settings_language: 'Language',
-            theme_dark: 'Dark',
-            theme_light: 'Light',
-            nav_home: 'Home',
-            nav_explore: 'Explore',
-            nav_tiktok: 'TikTok',
-            nav_library: 'Library',
-            nav_history: 'History',
-            nav_liked: 'Liked',
-            search_placeholder: 'Search songs, artists...',
-            login_btn: 'Sign in',
-            logout_btn: 'Sign out',
-            login_title: 'Sign in / Register',
-        },
-        zh: {
-            settings_title: '设置',
-            settings_theme: '主题',
-            settings_language: '语言',
-            theme_dark: '深色',
-            theme_light: '浅色',
-            nav_home: '首页',
-            nav_explore: '探索',
-            nav_tiktok: 'TikTok',
-            nav_library: '音乐库',
-            nav_history: '历史',
-            nav_liked: '已喜欢',
-            search_placeholder: '搜索歌曲、艺术家...',
-            login_btn: '登录',
-            logout_btn: '退出',
-            login_title: '登录 / 注册',
-        }
-    };
-
-    function setLanguage(lang) {
-        const strings = i18n[lang] || i18n['vi'];
-        localStorage.setItem('coca_lang', lang);
-
-        // Update all elements with data-i18n attribute
-        document.querySelectorAll('[data-i18n]').forEach(el => {
-            const key = el.dataset.i18n;
-            if (strings[key]) el.textContent = strings[key];
-        });
-
-        // Update sidebar labels
-        const navMap = {
-            'nav-home': strings.nav_home,
-            'nav-explore': strings.nav_explore,
-            'nav-tiktok': strings.nav_tiktok,
-            'nav-library': strings.nav_library,
-            'nav-history': strings.nav_history,
-            'nav-liked': strings.nav_liked,
-            'mnav-home': strings.nav_home,
-            'mnav-explore': strings.nav_explore,
-            'mnav-tiktok': strings.nav_tiktok,
-            'mnav-library': strings.nav_library,
-        };
-        for (const [id, text] of Object.entries(navMap)) {
-            const el = $(id);
-            if (el) {
-                const label = el.querySelector('.sidebar-label, .mobile-nav-label');
-                if (label) label.textContent = text;
-            }
-        }
-
-        // Update search placeholder
-        if (dom.searchInput) dom.searchInput.placeholder = strings.search_placeholder;
-
-        // Update login button
-        const loginText = document.querySelector('#header-login-btn .login-text');
-        if (loginText) loginText.textContent = strings.login_btn;
-
-        // Update login modal title
-        const loginTitle = document.querySelector('.login-modal-content .modal-header h2');
-        if (loginTitle) loginTitle.textContent = strings.login_title;
-
-        // Update logout button
-        const logoutBtn = $('logout-btn');
-        if (logoutBtn) {
-            const icon = logoutBtn.querySelector('.material-icons-round');
-            logoutBtn.textContent = '';
-            if (icon) logoutBtn.appendChild(icon);
-            logoutBtn.append(' ' + strings.logout_btn);
-        }
     }
 };
 
