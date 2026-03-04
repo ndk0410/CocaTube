@@ -15,6 +15,7 @@ const App = (() => {
     let trendingData = [];
     let contextMenuEl = null;
     let isPlayingContextPlaylist = false; // Flag to stop auto-queuing random suggestions when playing a User Playlist
+    let unsubscribeSnapshot = null; // Store Firestore real-time listener
 
     // ===== INIT =====
 
@@ -318,45 +319,65 @@ const App = (() => {
     async function syncDataFromCloud(uid) {
         if (!window.firebaseDb) return;
         
+        showLoading();
+        showToast('Đang kết nối đồng bộ thời gian thực...', 2000);
+        
         try {
-            const doc = await window.firebaseDb.collection('users').doc(uid).get();
-            if (doc.exists) {
-                const data = doc.data();
-                
-                // Hydrate local state from cloud
-                if (data.history) localStorage.setItem('music_history', JSON.stringify(data.history));
-                if (data.liked) localStorage.setItem('music_liked', JSON.stringify(data.liked));
-                if (data.playlists) localStorage.setItem('music_playlists', JSON.stringify(data.playlists));
-                
-                // Force player to reload the new local data into memory
-                if (window.MusicPlayer && window.MusicPlayer.reloadUserData) {
-                    window.MusicPlayer.reloadUserData();
-                }
-                
-                console.log('Cloud data synced to local storage successfully');
-                
-                // Refresh current page if needed
-                if (currentPage === 'library' || currentPage === 'liked' || currentPage === 'history' || currentPage === 'playlist') {
-                    navigateTo(currentPage);
-                }
-            } else {
-                // First time login - upload current local data to cloud
-                const history = JSON.parse(localStorage.getItem('music_history') || '[]');
-                const liked = JSON.parse(localStorage.getItem('music_liked') || '[]');
-                const playlists = JSON.parse(localStorage.getItem('music_playlists') || '[]');
-                
-                await window.firebaseDb.collection('users').doc(uid).set({
-                    history,
-                    liked,
-                    playlists,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                console.log('Initial local data synced up to cloud');
+            // Unsubscribe previous listener if exists
+            if (unsubscribeSnapshot) {
+                unsubscribeSnapshot();
             }
+
+            // Real-time sync listener
+            unsubscribeSnapshot = window.firebaseDb.collection('users').doc(uid).onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    
+                    // Hydrate local state from cloud
+                    if (data.history) localStorage.setItem('music_history', JSON.stringify(data.history));
+                    if (data.liked) localStorage.setItem('music_liked', JSON.stringify(data.liked));
+                    if (data.playlists) localStorage.setItem('music_playlists', JSON.stringify(data.playlists));
+                    
+                    // Force player to reload the new local data into memory
+                    if (window.MusicPlayer && window.MusicPlayer.reloadUserData) {
+                        window.MusicPlayer.reloadUserData();
+                    }
+                    
+                    console.log('Phát hiện dữ liệu Cloud thay đổi, đã đồng bộ về máy');
+                    
+                    // Refresh current page if needed
+                    if (currentPage === 'library' || currentPage === 'liked' || currentPage === 'history' || currentPage === 'playlist') {
+                        navigateTo(currentPage);
+                    }
+                } else {
+                    // First time login - upload current local data to cloud
+                    const history = JSON.parse(localStorage.getItem('music_history') || '[]');
+                    const liked = JSON.parse(localStorage.getItem('music_liked') || '[]');
+                    const playlists = JSON.parse(localStorage.getItem('music_playlists') || '[]');
+                    
+                    window.firebaseDb.collection('users').doc(uid).set({
+                        history,
+                        liked,
+                        playlists,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                    }).then(() => {
+                        console.log('Khởi tạo dữ liệu người dùng mới trên Cloud');
+                        showToast('Đã tạo hồ sơ đám mây thành công!');
+                    });
+                }
+                
+                hideLoading();
+            }, (error) => {
+                console.error('Lỗi onSnapshot:', error);
+                showToast('Mất kết nối đồng bộ: Vui lòng kiểm tra mạng');
+                hideLoading();
+            });
+            
         } catch (error) {
-            console.error('Error syncing data from cloud:', error);
-            showToast('Không thể đồng bộ dữ liệu từ cloud');
+            console.error('Error setting up cloud sync:', error);
+            showToast('Lỗi khởi tạo đồng bộ dữ liệu');
+            hideLoading();
         }
     }
 
@@ -383,6 +404,10 @@ const App = (() => {
         
         try {
             dom.userDropdown.classList.add('hidden');
+            if (unsubscribeSnapshot) {
+                unsubscribeSnapshot();
+                unsubscribeSnapshot = null;
+            }
             await window.firebaseAuth.signOut();
             showToast('Đã đăng xuất thành công');
         } catch (error) {
