@@ -6,8 +6,10 @@
 const MusicPlayer = (() => {
     // ===== STATE =====
     let ytPlayer = null;
+    let audioPlayer = null;
     let isReady = false;
     let isPlaying = false;
+    let isVideoMode = false; // False = Audio Mode (Background playable), True = Video Mode (YT IFrame)
 
     let queue = [];
     let currentIndex = -1;
@@ -43,6 +45,9 @@ const MusicPlayer = (() => {
 
         // Load saved state
         loadState();
+
+        // Setup HTML5 Audio Player for background playback
+        setupAudioPlayer();
 
         // Load YouTube IFrame API
         const tag = document.createElement('script');
@@ -81,6 +86,51 @@ const MusicPlayer = (() => {
                 }
             });
         };
+    }
+
+    function setupAudioPlayer() {
+        audioPlayer = document.getElementById('native-audio-player');
+        if (!audioPlayer) return;
+
+        audioPlayer.volume = volume / 100;
+
+        audioPlayer.addEventListener('play', () => {
+            if (!isVideoMode) {
+                isPlaying = true;
+                startTimeUpdates();
+                onStateChange({ playing: true, state: YT.PlayerState.PLAYING, track: currentTrack });
+                updateMediaSession();
+            }
+        });
+
+        audioPlayer.addEventListener('pause', () => {
+            if (!isVideoMode) {
+                isPlaying = false;
+                stopTimeUpdates();
+                onStateChange({ playing: false, state: YT.PlayerState.PAUSED, track: currentTrack });
+                updateMediaSession();
+            }
+        });
+
+        audioPlayer.addEventListener('ended', () => {
+            if (!isVideoMode) {
+                isPlaying = false;
+                stopTimeUpdates();
+                handleTrackEnd();
+            }
+        });
+
+        audioPlayer.addEventListener('error', (e) => {
+            if (!isVideoMode) {
+                console.error('Audio Player Error:', e);
+                onError(e);
+                if (queue.length > 1) {
+                    setTimeout(() => next(), 1000);
+                }
+            }
+        });
+        
+        // Let audioPlayer handle its own timeupdates if possible, or we continue using our setInterval
     }
 
     function handlePlayerReady() {
@@ -141,11 +191,22 @@ const MusicPlayer = (() => {
 
         currentTrack = track;
 
+        // Load into YouTube Player
         if (isReady && ytPlayer) {
-            if (autoplay) {
+            if (autoplay && isVideoMode) {
                 ytPlayer.loadVideoById(track.id);
             } else {
+                // Just cue if we are going to play Audio background instead
                 ytPlayer.cueVideoById(track.id);
+            }
+        }
+
+        // Load into HTML5 Audio Player
+        if (audioPlayer) {
+            audioPlayer.src = `/api/stream?id=${track.id}`;
+            audioPlayer.load();
+            if (autoplay && !isVideoMode) {
+                audioPlayer.play().catch(e => console.error("Audio block:", e));
             }
         }
 
@@ -156,20 +217,24 @@ const MusicPlayer = (() => {
     }
 
     function play() {
-        if (!isReady || !ytPlayer) return;
-
         if (!currentTrack && queue.length > 0) {
             currentIndex = 0;
             loadTrack(queue[0]);
             return;
         }
 
-        ytPlayer.playVideo();
+        if (isVideoMode) {
+            if (audioPlayer) audioPlayer.pause();
+            if (isReady && ytPlayer) ytPlayer.playVideo();
+        } else {
+            if (isReady && ytPlayer) ytPlayer.pauseVideo();
+            if (audioPlayer && audioPlayer.src) audioPlayer.play().catch(e => console.error(e));
+        }
     }
 
     function pause() {
-        if (!isReady || !ytPlayer) return;
-        ytPlayer.pauseVideo();
+        if (isReady && ytPlayer) ytPlayer.pauseVideo();
+        if (audioPlayer) audioPlayer.pause();
     }
 
     function togglePlay() {
@@ -206,8 +271,9 @@ const MusicPlayer = (() => {
         if (queue.length === 0) return;
 
         // If more than 3 seconds in, restart current track
-        if (isReady && ytPlayer && ytPlayer.getCurrentTime && ytPlayer.getCurrentTime() > 3) {
-            ytPlayer.seekTo(0);
+        const currentMs = getCurrentTime();
+        if (currentMs > 3) {
+            seekTo(0);
             return;
         }
 
@@ -229,13 +295,12 @@ const MusicPlayer = (() => {
     }
 
     function seekTo(time) {
-        if (!isReady || !ytPlayer) return;
-        ytPlayer.seekTo(time, true);
+        if (isReady && ytPlayer) ytPlayer.seekTo(time, true);
+        if (audioPlayer && isFinite(audioPlayer.duration)) audioPlayer.currentTime = time;
     }
 
     function seekToPercent(percent) {
-        if (!isReady || !ytPlayer) return;
-        const duration = ytPlayer.getDuration() || 0;
+        const duration = getDuration() || 0;
         seekTo((percent / 100) * duration);
     }
 
@@ -243,6 +308,9 @@ const MusicPlayer = (() => {
         volume = Math.max(0, Math.min(100, vol));
         if (isReady && ytPlayer) {
             ytPlayer.setVolume(volume);
+        }
+        if (audioPlayer) {
+            audioPlayer.volume = volume / 100;
         }
         saveState();
     }
@@ -252,16 +320,22 @@ const MusicPlayer = (() => {
     }
 
     function toggleMute() {
-        if (!isReady || !ytPlayer) return;
-        if (ytPlayer.isMuted()) {
-            ytPlayer.unMute();
-        } else {
-            ytPlayer.mute();
+        if (audioPlayer) {
+            audioPlayer.muted = !audioPlayer.muted;
+        }
+        if (isReady && ytPlayer) {
+            if (ytPlayer.isMuted()) {
+                ytPlayer.unMute();
+            } else {
+                ytPlayer.mute();
+            }
         }
     }
 
     function isMuted() {
-        return isReady && ytPlayer && ytPlayer.isMuted();
+        if (isVideoMode) return isReady && ytPlayer && ytPlayer.isMuted();
+        if (audioPlayer) return audioPlayer.muted;
+        return false;
     }
 
     // ===== TRACK END HANDLING =====
@@ -282,9 +356,20 @@ const MusicPlayer = (() => {
     function startTimeUpdates() {
         stopTimeUpdates();
         timeUpdateInterval = setInterval(() => {
-            if (!isReady || !ytPlayer || !ytPlayer.getCurrentTime) return;
-            const current = ytPlayer.getCurrentTime() || 0;
-            const duration = ytPlayer.getDuration() || 0;
+            let current = 0;
+            let duration = 0;
+            
+            if (isVideoMode) {
+                if (!isReady || !ytPlayer || !ytPlayer.getCurrentTime) return;
+                current = ytPlayer.getCurrentTime() || 0;
+                duration = ytPlayer.getDuration() || 0;
+            } else {
+                if (!audioPlayer) return;
+                current = audioPlayer.currentTime || 0;
+                duration = audioPlayer.duration || 0;
+                if (!isFinite(duration)) duration = 0;
+            }
+
             onTimeUpdate({
                 current,
                 duration,
@@ -650,13 +735,34 @@ const MusicPlayer = (() => {
     }
 
     function getDuration() {
-        if (!isReady || !ytPlayer || !ytPlayer.getDuration) return 0;
-        return ytPlayer.getDuration();
+        if (isVideoMode) return isReady && ytPlayer && ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
+        if (audioPlayer && isFinite(audioPlayer.duration)) return audioPlayer.duration;
+        return 0;
     }
 
     function getCurrentTime() {
-        if (!isReady || !ytPlayer || !ytPlayer.getCurrentTime) return 0;
-        return ytPlayer.getCurrentTime();
+        if (isVideoMode) return isReady && ytPlayer && ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+        if (audioPlayer) return audioPlayer.currentTime || 0;
+        return 0;
+    }
+
+    function setVideoMode(isVideo) {
+        if (isVideoMode === isVideo) return;
+        
+        const wasPlaying = isPlaying;
+        const currentMs = getCurrentTime();
+        
+        isVideoMode = isVideo;
+        
+        // Sync time to the incoming player
+        seekTo(currentMs);
+        
+        // Toggle play/pause correctly across players
+        if (wasPlaying) {
+            play();
+        } else {
+            pause();
+        }
     }
 
     // ===== PUBLIC API =====
@@ -704,6 +810,7 @@ const MusicPlayer = (() => {
         addToPlaylist,
         removeFromPlaylist,
         getPlaylist,
-        reloadUserData
+        reloadUserData,
+        setVideoMode
     };
 })();

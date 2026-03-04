@@ -373,6 +373,11 @@ const App = (() => {
             if (dom.fsArtwork) dom.fsArtwork.classList.remove('video-mode-active');
             if (dom.fullscreenPlayer) dom.fullscreenPlayer.classList.remove('video-mode-active');
         }
+
+        // Notify player.js to swap audio engines
+        if (window.MusicPlayer && window.MusicPlayer.setVideoMode) {
+            window.MusicPlayer.setVideoMode(isVideo);
+        }
     }
 
     // ===== AUTHENTICATION LOGIC =====
