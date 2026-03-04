@@ -66,9 +66,9 @@ const MusicPlayer = (() => {
                 width: '1',
                 playerVars: {
                     autoplay: 0,
-                    controls: 0,
+                    controls: 1, // Enabled to allow quality selections
                     disablekb: 1,
-                    fs: 0,
+                    fs: 1,       // Enabled to allow native Fullscreen switching
                     modestbranding: 1,
                     rel: 0,
                     showinfo: 0,

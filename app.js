@@ -301,16 +301,21 @@ const App = (() => {
     function setVideoMode(isVideo) {
         if (!dom.fsModeSongBtn || !dom.fsModeVideoBtn || !dom.ytPlayerContainer) return;
         
+        // Cache fsArtwork if not already in dom object
+        if (!dom.fsArtwork) dom.fsArtwork = document.querySelector('.fs-artwork');
+        
         if (isVideo) {
             dom.fsModeSongBtn.classList.remove('active');
             dom.fsModeVideoBtn.classList.add('active');
             dom.fsThumbnail.classList.add('video-mode-hidden');
             dom.ytPlayerContainer.classList.remove('video-mode-hidden');
+            if (dom.fsArtwork) dom.fsArtwork.classList.add('video-mode-active');
         } else {
             dom.fsModeVideoBtn.classList.remove('active');
             dom.fsModeSongBtn.classList.add('active');
             dom.ytPlayerContainer.classList.add('video-mode-hidden');
             dom.fsThumbnail.classList.remove('video-mode-hidden');
+            if (dom.fsArtwork) dom.fsArtwork.classList.remove('video-mode-active');
         }
     }
 
