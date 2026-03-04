@@ -293,6 +293,47 @@
         </a>
     </nav>
 
+    <!-- ====== SETTINGS PANEL ====== -->
+    <div class="settings-overlay hidden" id="settings-overlay">
+        <div class="settings-panel" id="settings-panel">
+            <div class="settings-header">
+                <h3 data-i18n="settings_title">Cài đặt</h3>
+                <button class="icon-btn" id="close-settings">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="material-icons-round">dark_mode</span>
+                        <span data-i18n="settings_theme">Giao diện</span>
+                    </div>
+                    <div class="theme-toggle" id="theme-toggle">
+                        <button class="theme-btn active" data-theme="dark">
+                            <span class="material-icons-round">dark_mode</span>
+                            <span data-i18n="theme_dark">Tối</span>
+                        </button>
+                        <button class="theme-btn" data-theme="light">
+                            <span class="material-icons-round">light_mode</span>
+                            <span data-i18n="theme_light">Sáng</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="material-icons-round">language</span>
+                        <span data-i18n="settings_language">Ngôn ngữ</span>
+                    </div>
+                    <select class="lang-select" id="lang-select">
+                        <option value="vi" selected>Tiếng Việt</option>
+                        <option value="en">English</option>
+                        <option value="zh">中文</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ====== TOAST NOTIFICATION ====== -->
     <div class="toast-container" id="toast-container"></div>
 

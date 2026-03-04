@@ -2624,3 +2624,141 @@ img {
         border-radius: 0;
     }
 }
+
+/* ===== SETTINGS PANEL ===== */
+
+.settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.settings-panel {
+    background: var(--bg-secondary);
+    border-radius: 16px;
+    width: min(90%, 400px);
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.settings-header h3 {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.settings-body {
+    padding: 8px 0;
+}
+
+.settings-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    gap: 12px;
+}
+
+.settings-item-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.settings-item-info .material-icons-round {
+    color: var(--text-secondary);
+    font-size: 22px;
+}
+
+.theme-toggle {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+    padding: 3px;
+}
+
+.theme-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.theme-btn .material-icons-round {
+    font-size: 16px;
+}
+
+.theme-btn.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.lang-select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    outline: none;
+}
+
+.lang-select:focus {
+    border-color: var(--accent);
+}
+
+/* ===== LIGHT THEME ===== */
+
+body.light-theme {
+    --bg-primary: #f5f5f5;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e8e8e8;
+    --bg-hover: #dcdcdc;
+    --bg-active: #d0d0d0;
+    --surface: #ffffff;
+    --surface-variant: #f0f0f0;
+    --text-primary: #1a1a1a;
+    --text-secondary: #606060;
+    --text-tertiary: #909090;
+    --border: #d0d0d0;
+    --player-bg: #ffffff;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+body.light-theme .header {
+    background: rgba(255, 255, 255, 0.95);
+    border-bottom: 1px solid var(--border);
+}
+
+body.light-theme .search-input {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+body.light-theme .tiktok-card {
+    background: #eee;
+}
