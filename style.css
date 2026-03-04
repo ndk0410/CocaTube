@@ -1667,6 +1667,20 @@ img {
 
     .quick-picks-grid {
         grid-template-columns: 1fr;
+        grid-auto-columns: minmax(260px, 85vw);
+    }
+
+    .song-row-info {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .song-row-title {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
     }
 
     .queue-panel {
