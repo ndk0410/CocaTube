@@ -632,6 +632,9 @@ const App = (() => {
             case 'search':
                 // Search handled by performSearch
                 break;
+            case 'tiktok':
+                loadTikTokPage();
+                break;
         }
 
         dom.mainContent.scrollTop = 0;
@@ -1049,6 +1052,204 @@ const App = (() => {
         }
 
         hideLoading();
+    }
+
+    // ===== TIKTOK PAGE =====
+
+    let tiktokFeedData = [];
+    let tiktokCurrentTab = 'trending';
+    let tiktokObserver = null;
+
+    async function loadTikTokPage() {
+        const container = dom.pageContainer;
+        container.innerHTML = `
+            <div class="tiktok-page">
+                <div class="tiktok-tabs">
+                    <button class="tiktok-tab active" data-tiktok-tab="trending">🔥 Đề xuất</button>
+                    <button class="tiktok-tab" data-tiktok-tab="search">🔍 Tìm kiếm</button>
+                </div>
+                <div class="tiktok-search-bar" id="tiktok-search-bar">
+                    <input type="text" id="tiktok-search-input" placeholder="Tìm hashtag hoặc username...">
+                    <button id="tiktok-search-go">Tìm</button>
+                </div>
+                <div class="tiktok-feed" id="tiktok-feed">
+                    <div class="tiktok-loading">
+                        <div class="spinner"></div>
+                        <p>Đang tải video TikTok...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Tab switching
+        container.querySelectorAll('.tiktok-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                container.querySelectorAll('.tiktok-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const tabType = tab.dataset.tiktokTab;
+                tiktokCurrentTab = tabType;
+
+                const searchBar = container.querySelector('#tiktok-search-bar');
+                if (tabType === 'search') {
+                    searchBar.classList.add('visible');
+                    container.querySelector('#tiktok-search-input').focus();
+                } else {
+                    searchBar.classList.remove('visible');
+                    loadTikTokFeed();
+                }
+            });
+        });
+
+        // Search
+        const searchGoBtn = container.querySelector('#tiktok-search-go');
+        const searchInput = container.querySelector('#tiktok-search-input');
+        if (searchGoBtn) {
+            searchGoBtn.addEventListener('click', () => {
+                const q = searchInput.value.trim();
+                if (q) loadTikTokFeed(q);
+            });
+        }
+        if (searchInput) {
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const q = searchInput.value.trim();
+                    if (q) loadTikTokFeed(q);
+                }
+            });
+        }
+
+        hideLoading();
+        loadTikTokFeed();
+    }
+
+    async function loadTikTokFeed(searchQuery) {
+        const feedEl = document.getElementById('tiktok-feed');
+        if (!feedEl) return;
+
+        feedEl.innerHTML = '<div class="tiktok-loading"><div class="spinner"></div><p>Đang tải...</p></div>';
+
+        try {
+            let apiUrl;
+            if (searchQuery) {
+                apiUrl = `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(searchQuery)}&count=20`;
+            } else {
+                apiUrl = `https://www.tikwm.com/api/feed/list?region=VN&count=20`;
+            }
+
+            const res = await fetch(apiUrl);
+            const json = await res.json();
+
+            if (!json.data || !json.data.videos || json.data.videos.length === 0) {
+                feedEl.innerHTML = '<div class="tiktok-empty"><span class="material-icons-round" style="font-size:48px;">videocam_off</span><p>Không tìm thấy video nào</p></div>';
+                return;
+            }
+
+            tiktokFeedData = json.data.videos;
+            renderTikTokFeed(feedEl, tiktokFeedData);
+        } catch (err) {
+            console.error('TikTok API error:', err);
+            feedEl.innerHTML = '<div class="tiktok-empty"><span class="material-icons-round" style="font-size:48px;">error</span><p>Lỗi tải video TikTok. Vui lòng thử lại sau.</p></div>';
+        }
+    }
+
+    function renderTikTokFeed(feedEl, videos) {
+        feedEl.innerHTML = '';
+
+        // Disconnect old observer
+        if (tiktokObserver) tiktokObserver.disconnect();
+
+        videos.forEach((video, idx) => {
+            const card = document.createElement('div');
+            card.className = 'tiktok-card paused';
+            card.dataset.index = idx;
+
+            const playUrl = video.play || '';
+            const author = video.author ? (video.author.nickname || video.author.unique_id || 'Unknown') : 'Unknown';
+            const authorId = video.author ? ('@' + (video.author.unique_id || '')) : '';
+            const desc = video.title || '';
+            const musicTitle = video.music_info ? video.music_info.title : '';
+            const likes = formatTikTokCount(video.digg_count || 0);
+            const comments = formatTikTokCount(video.comment_count || 0);
+            const shares = formatTikTokCount(video.share_count || 0);
+
+            card.innerHTML = `
+                <video src="${playUrl}" loop playsinline preload="metadata" muted></video>
+                <span class="material-icons-round tiktok-play-overlay">play_arrow</span>
+                <div class="tiktok-overlay">
+                    <div class="tiktok-author">${author} <span style="font-weight:400;color:rgba(255,255,255,0.6);font-size:0.85rem;">${authorId}</span></div>
+                    <div class="tiktok-desc">${desc}</div>
+                    ${musicTitle ? `<div class="tiktok-music-tag"><span class="material-icons-round" style="font-size:14px;">music_note</span> ${musicTitle}</div>` : ''}
+                </div>
+                <div class="tiktok-actions">
+                    <button class="tiktok-action-btn" data-action="like"><span class="material-icons-round">favorite</span><span>${likes}</span></button>
+                    <button class="tiktok-action-btn" data-action="comment"><span class="material-icons-round">chat_bubble</span><span>${comments}</span></button>
+                    <button class="tiktok-action-btn" data-action="share"><span class="material-icons-round">share</span><span>${shares}</span></button>
+                </div>
+            `;
+
+            // Click to play/pause
+            const videoEl = card.querySelector('video');
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.tiktok-action-btn')) return;
+                if (videoEl.paused) {
+                    videoEl.muted = false;
+                    videoEl.play();
+                    card.classList.remove('paused');
+                } else {
+                    videoEl.pause();
+                    card.classList.add('paused');
+                }
+            });
+
+            // Action buttons
+            card.querySelectorAll('.tiktok-action-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const action = btn.dataset.action;
+                    if (action === 'like') {
+                        btn.classList.toggle('liked');
+                    } else if (action === 'share') {
+                        const shareUrl = `https://www.tiktok.com/@${video.author?.unique_id || ''}/video/${video.video_id || ''}`;
+                        if (navigator.share) {
+                            navigator.share({ title: desc, url: shareUrl });
+                        } else {
+                            navigator.clipboard.writeText(shareUrl);
+                            showToast('Đã sao chép liên kết!');
+                        }
+                    } else if (action === 'comment') {
+                        showToast('Tính năng bình luận chưa khả dụng');
+                    }
+                });
+            });
+
+            feedEl.appendChild(card);
+        });
+
+        // IntersectionObserver for auto play/pause on scroll
+        tiktokObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const videoEl = entry.target.querySelector('video');
+                if (!videoEl) return;
+                if (entry.isIntersecting) {
+                    videoEl.muted = false;
+                    videoEl.play().catch(() => {});
+                    entry.target.classList.remove('paused');
+                } else {
+                    videoEl.pause();
+                    entry.target.classList.add('paused');
+                }
+            });
+        }, { threshold: 0.6 });
+
+        feedEl.querySelectorAll('.tiktok-card').forEach(card => {
+            tiktokObserver.observe(card);
+        });
+    }
+
+    function formatTikTokCount(n) {
+        if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+        if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+        return n.toString();
     }
 
     // ===== SEARCH RESULTS RENDERER =====
