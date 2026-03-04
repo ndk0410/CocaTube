@@ -598,6 +598,9 @@ const MusicPlayer = (() => {
         const uid = window.currentUser.uid;
         const db = window.firebaseDb;
         
+        // Flag local write to prevent immediate rebound sync from onSnapshot
+        localStorage.setItem('last_local_write', Date.now().toString());
+        
         db.collection('users').doc(uid).set({
             [key]: data,
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()

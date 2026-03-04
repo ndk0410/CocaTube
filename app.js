@@ -333,21 +333,36 @@ const App = (() => {
                 if (doc.exists) {
                     const data = doc.data();
                     
-                    // Hydrate local state from cloud
-                    if (data.history) localStorage.setItem('music_history', JSON.stringify(data.history));
-                    if (data.liked) localStorage.setItem('music_liked', JSON.stringify(data.liked));
-                    if (data.playlists) localStorage.setItem('music_playlists', JSON.stringify(data.playlists));
+                    // Skip sync if this device just wrote to Cloud
+                    const lastWrite = parseInt(localStorage.getItem('last_local_write') || '0');
+                    if (Date.now() - lastWrite < 2000) return;
                     
-                    // Force player to reload the new local data into memory
-                    if (window.MusicPlayer && window.MusicPlayer.reloadUserData) {
-                        window.MusicPlayer.reloadUserData();
-                    }
+                    // Check if cloud data is actually different from local to prevent infinite sync loops
+                    const localHistory = localStorage.getItem('music_history') || '[]';
+                    const localLiked = localStorage.getItem('music_liked') || '[]';
+                    const localPlaylists = localStorage.getItem('music_playlists') || '[]';
                     
-                    console.log('Phát hiện dữ liệu Cloud thay đổi, đã đồng bộ về máy');
+                    const cloudHistory = data.history ? JSON.stringify(data.history) : '[]';
+                    const cloudLiked = data.liked ? JSON.stringify(data.liked) : '[]';
+                    const cloudPlaylists = data.playlists ? JSON.stringify(data.playlists) : '[]';
                     
-                    // Refresh current page if needed
-                    if (currentPage === 'library' || currentPage === 'liked' || currentPage === 'history' || currentPage === 'playlist') {
-                        navigateTo(currentPage);
+                    if (localHistory !== cloudHistory || localLiked !== cloudLiked || localPlaylists !== cloudPlaylists) {
+                        // Hydrate local state from cloud
+                        localStorage.setItem('music_history', cloudHistory);
+                        localStorage.setItem('music_liked', cloudLiked);
+                        localStorage.setItem('music_playlists', cloudPlaylists);
+                        
+                        // Force player to reload the new local data into memory
+                        if (window.MusicPlayer && window.MusicPlayer.reloadUserData) {
+                            window.MusicPlayer.reloadUserData();
+                        }
+                        
+                        // console.log('Phát hiện dữ liệu Cloud thay đổi, đã đồng bộ về máy');
+                        
+                        // Refresh current page if needed
+                        if (currentPage === 'library' || currentPage === 'liked' || currentPage === 'history' || currentPage === 'playlist') {
+                            navigateTo(currentPage);
+                        }
                     }
                 } else {
                     // First time login - upload current local data to cloud
