@@ -1822,6 +1822,15 @@ window.__onGCastApiAvailable = function(isAvailable) {
     }
 };
 
+// ===== SERVICE WORKER FOR PWA =====
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Service Worker registered', reg))
+            .catch(err => console.error('Service Worker registration failed:', err));
+    });
+}
+
 // ===== START APP =====
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
