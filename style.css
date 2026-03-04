@@ -1684,53 +1684,69 @@ img {
 
     .player-bar {
         bottom: var(--mobile-nav-height);
-    }
-
-    .player-controls .control-btn {
-        display: none;
-    }
-
-    .player-controls #shuffle-btn,
-    .player-controls #repeat-btn {
-        display: none;
-    }
-
-    .player-extra {
-        display: none;
-    }
-
-    .player-extra .fullscreen-player-btn {
-        display: flex;
+        height: 72px;
+        /* Slightly shorter on mobile */
     }
 
     .player-inner {
-        padding: 0 8px;
+        padding: 0 12px;
+    }
+
+    .player-left {
+        width: auto;
+        flex: 1;
+    }
+
+    .player-thumbnail-wrapper {
+        width: 48px;
+        height: 48px;
+    }
+
+    .player-song-title {
+        font-size: 13px;
+    }
+
+    .verified-icon {
+        display: none;
+        /* Save space on mobile */
+    }
+
+    .player-center {
+        width: auto;
+        flex: 0;
+        max-width: none;
+    }
+
+    .player-controls {
+        margin-bottom: 0;
         gap: 8px;
+    }
+
+    .control-btn#shuffle-btn,
+    .control-btn#repeat-btn,
+    .control-btn#prev-btn {
+        display: none;
+    }
+
+    .player-progress-container {
+        display: none;
+        /* Hide full progress on primary bar, keep it for fullscreen */
+    }
+
+    .player-right {
+        width: auto;
+        gap: 4px;
+    }
+
+    .extra-btn#cast-btn,
+    .volume-wrapper,
+    .extra-btn#miniplayer-btn {
+        display: none;
     }
 
     .play-btn {
         width: 40px;
         height: 40px;
-    }
-
-    .play-btn .material-icons-round {
-        font-size: 24px;
-    }
-
-    .fullscreen-player-btn {
-        display: flex !important;
-    }
-
-    .player-extra {
-        display: flex;
-        gap: 0;
-    }
-
-    .player-extra .time-display,
-    .player-extra .time-separator,
-    .player-extra .volume-wrapper,
-    .player-extra #queue-btn {
-        display: none;
     }
 
     .music-card {
