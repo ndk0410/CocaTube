@@ -14,6 +14,7 @@ const App = (() => {
     let isSearchActive = false;
     let trendingData = [];
     let contextMenuEl = null;
+    let isPlayingContextPlaylist = false; // Flag to stop auto-queuing random suggestions when playing a User Playlist
 
     // ===== INIT =====
 
@@ -326,6 +327,11 @@ const App = (() => {
                 if (data.history) localStorage.setItem('music_history', JSON.stringify(data.history));
                 if (data.liked) localStorage.setItem('music_liked', JSON.stringify(data.liked));
                 if (data.playlists) localStorage.setItem('music_playlists', JSON.stringify(data.playlists));
+                
+                // Force player to reload the new local data into memory
+                if (window.MusicPlayer && window.MusicPlayer.reloadUserData) {
+                    window.MusicPlayer.reloadUserData();
+                }
                 
                 console.log('Cloud data synced to local storage successfully');
                 
@@ -765,6 +771,7 @@ const App = (() => {
         const playAllBtn = $('play-all-pl');
         if (playAllBtn) {
             playAllBtn.addEventListener('click', () => {
+                isPlayingContextPlaylist = true;
                 MusicPlayer.playAll(pl.tracks);
                 showToast(`Đang phát ${pl.name}`);
             });
@@ -773,6 +780,7 @@ const App = (() => {
         const shuffleBtn = $('shuffle-pl');
         if (shuffleBtn) {
             shuffleBtn.addEventListener('click', () => {
+                isPlayingContextPlaylist = true;
                 MusicPlayer.playAll(pl.tracks);
                 if (!MusicPlayer.getShuffleMode()) MusicPlayer.toggleShuffle();
                 showToast(`Đang phát ngẫu nhiên ${pl.name}`);
@@ -892,6 +900,7 @@ const App = (() => {
         const playAllBtn = $('play-all-liked');
         if (playAllBtn) {
             playAllBtn.addEventListener('click', () => {
+                isPlayingContextPlaylist = true;
                 MusicPlayer.playAll(liked);
                 showToast('Đang phát tất cả bài hát yêu thích');
             });
@@ -1034,6 +1043,7 @@ const App = (() => {
                 e.stopPropagation();
                 try {
                     const track = JSON.parse(target.dataset.track);
+                    isPlayingContextPlaylist = false;
                     MusicPlayer.playTrack(track);
                 } catch (err) { console.error(err); }
                 break;
@@ -1527,6 +1537,8 @@ const App = (() => {
     // ===== RELATED =====
 
     async function loadRelated(videoId) {
+        if (isPlayingContextPlaylist) return; // Do not auto-add random songs when playing a custom Playlist
+
         const queue = MusicPlayer.getQueue();
         const currentIdx = MusicPlayer.getCurrentIndex();
 

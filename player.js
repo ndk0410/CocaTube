@@ -17,6 +17,11 @@ const MusicPlayer = (() => {
     let currentTrack = null;
     let shuffledIndices = [];
 
+    // User data
+    let history = JSON.parse(localStorage.getItem('music_history') || '[]');
+    let likedSongs = JSON.parse(localStorage.getItem('music_liked') || '[]');
+    let playlists = JSON.parse(localStorage.getItem('music_playlists') || '[]');
+
     // Callbacks
     let onStateChange = null;
     let onTrackChange = null;
@@ -448,7 +453,6 @@ const MusicPlayer = (() => {
     // ===== HISTORY =====
 
     function addToHistory(track) {
-        let history = getHistory();
         // Remove duplicate
         history = history.filter(t => t.id !== track.id);
         // Add to beginning
@@ -468,14 +472,11 @@ const MusicPlayer = (() => {
     }
 
     function getHistory() {
-        try {
-            return JSON.parse(localStorage.getItem('music_history') || '[]');
-        } catch {
-            return [];
-        }
+        return [...history];
     }
 
     function clearHistory() {
+        history = [];
         localStorage.setItem('music_history', '[]');
         syncToCloud('history', []);
     }
@@ -483,15 +484,14 @@ const MusicPlayer = (() => {
     // ===== LIKED SONGS =====
 
     function toggleLike(track) {
-        let liked = getLikedSongs();
-        const idx = liked.findIndex(t => t.id === track.id);
+        const idx = likedSongs.findIndex(t => t.id === track.id);
         if (idx >= 0) {
-            liked.splice(idx, 1);
-            localStorage.setItem('music_liked', JSON.stringify(liked));
-            syncToCloud('liked', liked);
+            likedSongs.splice(idx, 1);
+            localStorage.setItem('music_liked', JSON.stringify(likedSongs));
+            syncToCloud('liked', likedSongs);
             return false;
         } else {
-            liked.unshift({
+            likedSongs.unshift({
                 id: track.id,
                 title: track.title,
                 artist: track.artist,
@@ -500,41 +500,33 @@ const MusicPlayer = (() => {
                 durationText: track.durationText,
                 likedAt: Date.now()
             });
-            localStorage.setItem('music_liked', JSON.stringify(liked));
-            syncToCloud('liked', liked);
+            localStorage.setItem('music_liked', JSON.stringify(likedSongs));
+            syncToCloud('liked', likedSongs);
             return true;
         }
     }
 
     function isLiked(trackId) {
-        return getLikedSongs().some(t => t.id === trackId);
+        return likedSongs.some(t => t.id === trackId);
     }
 
     function getLikedSongs() {
-        try {
-            return JSON.parse(localStorage.getItem('music_liked') || '[]');
-        } catch {
-            return [];
-        }
+        return [...likedSongs];
     }
 
     // ===== PLAYLISTS =====
 
     function getPlaylists() {
-        try {
-            return JSON.parse(localStorage.getItem('music_playlists') || '[]');
-        } catch {
-            return [];
-        }
+        return [...playlists];
     }
 
-    function savePlaylists(playlists) {
+    function savePlaylists(newPlaylists) {
+        playlists = newPlaylists;
         localStorage.setItem('music_playlists', JSON.stringify(playlists));
         syncToCloud('playlists', playlists);
     }
 
     function createPlaylist(name) {
-        const playlists = getPlaylists();
         const id = 'pl_' + Date.now();
         playlists.push({
             id,
@@ -547,13 +539,11 @@ const MusicPlayer = (() => {
     }
 
     function deletePlaylist(playlistId) {
-        let playlists = getPlaylists();
         playlists = playlists.filter(p => p.id !== playlistId);
         savePlaylists(playlists);
     }
 
     function renamePlaylist(playlistId, newName) {
-        const playlists = getPlaylists();
         const pl = playlists.find(p => p.id === playlistId);
         if (pl) {
             pl.name = newName;
@@ -562,7 +552,6 @@ const MusicPlayer = (() => {
     }
 
     function addToPlaylist(playlistId, track) {
-        const playlists = getPlaylists();
         const pl = playlists.find(p => p.id === playlistId);
         if (pl) {
             // Avoid duplicates
@@ -583,7 +572,6 @@ const MusicPlayer = (() => {
     }
 
     function removeFromPlaylist(playlistId, trackId) {
-        const playlists = getPlaylists();
         const pl = playlists.find(p => p.id === playlistId);
         if (pl) {
             pl.tracks = pl.tracks.filter(t => t.id !== trackId);
@@ -592,7 +580,14 @@ const MusicPlayer = (() => {
     }
 
     function getPlaylist(playlistId) {
-        return getPlaylists().find(p => p.id === playlistId) || null;
+        return playlists.find(p => p.id === playlistId) || null;
+    }
+
+    // ===== USER DATA RELOAD =====
+    function reloadUserData() {
+        history = JSON.parse(localStorage.getItem('music_history') || '[]');
+        likedSongs = JSON.parse(localStorage.getItem('music_liked') || '[]');
+        playlists = JSON.parse(localStorage.getItem('music_playlists') || '[]');
     }
 
     // ===== CLOUD SYNC =====
@@ -705,6 +700,7 @@ const MusicPlayer = (() => {
         renamePlaylist,
         addToPlaylist,
         removeFromPlaylist,
-        getPlaylist
+        getPlaylist,
+        reloadUserData
     };
 })();
