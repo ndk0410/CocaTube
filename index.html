@@ -11,7 +11,9 @@
     <!-- Material Icons -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=8">
+    <!-- Google Cast SDK -->
+    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
 </head>
 <body>
 
@@ -54,6 +56,9 @@
             <button class="icon-btn mobile-search-btn" id="mobile-search-btn" aria-label="Search">
                 <span class="material-icons-round">search</span>
             </button>
+            
+            <!-- Google Cast Button -->
+            <google-cast-launcher style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;"></google-cast-launcher>
             
             <!-- Auth Buttons -->
             <button class="login-btn" id="header-login-btn">

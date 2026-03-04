@@ -154,6 +154,54 @@ const App = (() => {
         dom.mobileSearchBtn.addEventListener('click', openMobileSearch);
         dom.searchBackBtn.addEventListener('click', closeMobileSearch);
 
+        // Voice Search
+        dom.voiceSearchBtn = $('voice-search-btn');
+        if (dom.voiceSearchBtn) {
+            dom.voiceSearchBtn.addEventListener('click', () => {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    showToast('Trình duyệt của bạn không hỗ trợ tìm kiếm bằng giọng nói.');
+                    return;
+                }
+                
+                const recognition = new SpeechRecognition();
+                recognition.lang = 'vi-VN'; // Support Vietnamese
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+
+                recognition.onstart = () => {
+                    dom.voiceSearchBtn.style.color = 'var(--accent)';
+                    dom.voiceSearchBtn.classList.add('pulse-anim');
+                    showToast('Đang nghe...');
+                };
+
+                recognition.onspeechend = () => {
+                    recognition.stop();
+                };
+
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    dom.searchInput.value = transcript;
+                    dom.searchClearBtn.classList.add('visible');
+                    // Automatically trigger search
+                    performSearch(transcript);
+                };
+
+                recognition.onerror = (event) => {
+                    dom.voiceSearchBtn.style.color = '';
+                    dom.voiceSearchBtn.classList.remove('pulse-anim');
+                    showToast('Không nhận diện được giọng nói.');
+                };
+
+                recognition.onend = () => {
+                    dom.voiceSearchBtn.style.color = '';
+                    dom.voiceSearchBtn.classList.remove('pulse-anim');
+                };
+
+                recognition.start();
+            });
+        }
+
         // Navigation
         document.querySelectorAll('[data-page]').forEach(el => {
             el.addEventListener('click', (e) => {
@@ -169,7 +217,13 @@ const App = (() => {
 
         // Sidebar toggle
         dom.menuToggle.addEventListener('click', () => {
-            dom.sidebar.classList.toggle('open');
+            if (window.innerWidth > 768) {
+                // Desktop: Toggle mini sidebar
+                document.body.classList.toggle('sidebar-mini');
+            } else {
+                // Mobile: Toggle slide-in menu
+                dom.sidebar.classList.toggle('open');
+            }
         });
 
         // Close sidebar on content click (tablet)
@@ -1756,6 +1810,17 @@ const App = (() => {
 
     return { init };
 })();
+
+// ===== GOOGLE CAST =====
+window.__onGCastApiAvailable = function(isAvailable) {
+    if (isAvailable) {
+        cast.framework.CastContext.getInstance().setOptions({
+            receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+        });
+        console.log('Google Cast initialized');
+    }
+};
 
 // ===== START APP =====
 document.addEventListener('DOMContentLoaded', () => {
