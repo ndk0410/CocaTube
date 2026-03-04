@@ -75,6 +75,9 @@ const App = (() => {
         // Fullscreen Player
         dom.fullscreenPlayer = $('fullscreen-player');
         dom.fsCloseBtn = $('fs-close-btn');
+        dom.fsModeSongBtn = $('fs-mode-song');
+        dom.fsModeVideoBtn = $('fs-mode-video');
+        dom.ytPlayerContainer = $('yt-player-container');
         dom.fsThumbnail = $('fs-thumbnail');
         dom.fsSongTitle = $('fs-song-title');
         dom.fsSongArtist = $('fs-song-artist');
@@ -222,6 +225,10 @@ const App = (() => {
             if (MusicPlayer.getCurrentTrack()) openFullscreenPlayer();
         });
         dom.fsCloseBtn.addEventListener('click', closeFullscreenPlayer);
+        
+        if(dom.fsModeSongBtn) dom.fsModeSongBtn.addEventListener('click', () => setVideoMode(false));
+        if(dom.fsModeVideoBtn) dom.fsModeVideoBtn.addEventListener('click', () => setVideoMode(true));
+        
         dom.fsPlayBtn.addEventListener('click', () => MusicPlayer.togglePlay());
         dom.fsPrevBtn.addEventListener('click', () => MusicPlayer.previous());
         dom.fsNextBtn.addEventListener('click', () => MusicPlayer.next());
@@ -287,6 +294,24 @@ const App = (() => {
 
         // Initialize Firebase Auth Listener
         initAuth();
+    }
+
+    // ===== UI MODE TOGGLES =====
+    
+    function setVideoMode(isVideo) {
+        if (!dom.fsModeSongBtn || !dom.fsModeVideoBtn || !dom.ytPlayerContainer) return;
+        
+        if (isVideo) {
+            dom.fsModeSongBtn.classList.remove('active');
+            dom.fsModeVideoBtn.classList.add('active');
+            dom.fsThumbnail.classList.add('video-mode-hidden');
+            dom.ytPlayerContainer.classList.remove('video-mode-hidden');
+        } else {
+            dom.fsModeVideoBtn.classList.remove('active');
+            dom.fsModeSongBtn.classList.add('active');
+            dom.ytPlayerContainer.classList.add('video-mode-hidden');
+            dom.fsThumbnail.classList.remove('video-mode-hidden');
+        }
     }
 
     // ===== AUTHENTICATION LOGIC =====
