@@ -136,55 +136,6 @@ const MusicPlayer = (() => {
         // Let audioPlayer handle its own timeupdates if possible, or we continue using our setInterval
     }
 
-    function setupBackgroundAutoSwitch() {
-        document.addEventListener('visibilitychange', () => {
-            if (!currentTrack || !audioPlayer) return;
-
-            if (document.hidden && isPlaying && isVideoMode) {
-                // Screen is off / app minimized while YouTube is playing
-                // → Switch to HTML5 Audio so music keeps playing in background
-                console.log('[BG] Screen off → switching to Audio mode');
-                
-                const currentMs = getCurrentTime();
-                isVideoMode = false;
-
-                // Pause YouTube, start Audio from same position
-                if (isReady && ytPlayer) ytPlayer.pauseVideo();
-                
-                if (audioPlayer.src && audioPlayer.src !== '') {
-                    if (isFinite(audioPlayer.duration)) audioPlayer.currentTime = currentMs;
-                    audioPlayer.play().catch(e => {
-                        console.warn('[BG] Audio play failed, reverting to YT:', e);
-                        isVideoMode = true;
-                        if (isReady && ytPlayer) ytPlayer.playVideo();
-                    });
-                } else {
-                    // Audio URL not yet loaded, fetch it now
-                    fetchAudioUrl(currentTrack.id).then(url => {
-                        if (url && !document.hidden) return; // User came back, abort
-                        if (url) {
-                            audioPlayer.src = url;
-                            audioPlayer.load();
-                            audioPlayer.currentTime = currentMs;
-                            audioPlayer.play().catch(() => {
-                                isVideoMode = true;
-                                if (isReady && ytPlayer) ytPlayer.playVideo();
-                            });
-                        } else {
-                            // Fallback: revert to YouTube
-                            isVideoMode = true;
-                            if (isReady && ytPlayer) ytPlayer.playVideo();
-                        }
-                    });
-                }
-
-                // Notify UI (app.js) to update toggle buttons
-                if (window.onVideoModeChange) window.onVideoModeChange(false);
-                startTimeUpdates();
-            }
-        });
-    }
-
     function handlePlayerReady() {
         isReady = true;
         ytPlayer.setVolume(volume);
@@ -681,51 +632,90 @@ const MusicPlayer = (() => {
         return [...playlists];
     }
 
-    function savePlaylists(newPlaylists) {
+    function savePlaylists(newPlaylists, modifiedPlaylistId = null) {
         playlists = newPlaylists;
         localStorage.setItem('music_playlists', JSON.stringify(playlists));
-        syncToCloud('playlists', playlists);
+        
+        // Granular sync
+        if (modifiedPlaylistId) {
+            const pl = playlists.find(p => p.id === modifiedPlaylistId);
+            if (pl) syncPlaylistToCloud(pl);
+        } else {
+            // Full sync (rare, e.g. after import)
+            syncToCloud('playlists', playlists); // Fallback or handle loop
+        }
+    }
+
+    function syncPlaylistToCloud(playlist) {
+        if (!window.currentUser || !window.firebaseDb) return;
+        const uid = window.currentUser.uid;
+        localStorage.setItem('last_local_write', Date.now().toString());
+        
+        window.firebaseDb.collection('users').doc(uid)
+            .collection('playlists').doc(playlist.id).set(playlist)
+            .catch(err => console.error(`Error syncing playlist ${playlist.id}:`, err));
+    }
+
+    function deletePlaylistFromCloud(playlistId) {
+        if (!window.currentUser || !window.firebaseDb) return;
+        const uid = window.currentUser.uid;
+        localStorage.setItem('last_local_write', Date.now().toString());
+        
+        window.firebaseDb.collection('users').doc(uid)
+            .collection('playlists').doc(playlistId).delete()
+            .catch(err => console.error(`Error deleting playlist ${playlistId}:`, err));
     }
 
     function createPlaylist(name) {
         const id = 'pl_' + Date.now();
-        playlists.push({
+        const newPl = {
             id,
             name,
             tracks: [],
             createdAt: Date.now()
-        });
-        savePlaylists(playlists);
+        };
+        playlists.push(newPl);
+        savePlaylists(playlists, id);
         return id;
     }
 
     function deletePlaylist(playlistId) {
         playlists = playlists.filter(p => p.id !== playlistId);
         savePlaylists(playlists);
+        deletePlaylistFromCloud(playlistId);
     }
 
     function renamePlaylist(playlistId, newName) {
         const pl = playlists.find(p => p.id === playlistId);
         if (pl) {
             pl.name = newName;
-            savePlaylists(playlists);
+            savePlaylists(playlists, playlistId);
         }
     }
 
     function addToPlaylist(playlistId, track) {
+        return addMultipleToPlaylist(playlistId, [track]);
+    }
+
+    function addMultipleToPlaylist(playlistId, tracks) {
         const pl = playlists.find(p => p.id === playlistId);
         if (pl) {
-            // Avoid duplicates
-            if (!pl.tracks.some(t => t.id === track.id)) {
-                pl.tracks.push({
-                    id: track.id,
-                    title: track.title,
-                    artist: track.artist,
-                    thumbnail: track.thumbnail,
-                    duration: track.duration,
-                    durationText: track.durationText
-                });
-                savePlaylists(playlists);
+            let addedCount = 0;
+            tracks.forEach(track => {
+                if (!pl.tracks.some(t => t.id === track.id)) {
+                    pl.tracks.push({
+                        id: track.id,
+                        title: track.title,
+                        artist: track.artist,
+                        thumbnail: track.thumbnail,
+                        duration: track.duration,
+                        durationText: track.durationText
+                    });
+                    addedCount++;
+                }
+            });
+            if (addedCount > 0) {
+                savePlaylists(playlists, playlistId);
                 return true;
             }
         }
@@ -736,7 +726,7 @@ const MusicPlayer = (() => {
         const pl = playlists.find(p => p.id === playlistId);
         if (pl) {
             pl.tracks = pl.tracks.filter(t => t.id !== trackId);
-            savePlaylists(playlists);
+            savePlaylists(playlists, playlistId);
         }
     }
 
@@ -762,11 +752,23 @@ const MusicPlayer = (() => {
         // Flag local write to prevent immediate rebound sync from onSnapshot
         localStorage.setItem('last_local_write', Date.now().toString());
         
-        db.collection('users').doc(uid).set({
-            [key]: data,
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true })
-        .catch(err => console.error(`Error syncing ${key} to cloud:`, err));
+        if (key === 'playlists') {
+            // Special case: Batch update or handled by granular sync
+            // For now, if we call syncToCloud('playlists'), we update subcollections
+            const batch = db.batch();
+            const userRef = db.collection('users').doc(uid);
+            data.forEach(pl => {
+                const plRef = userRef.collection('playlists').doc(pl.id);
+                batch.set(plRef, pl);
+            });
+            batch.commit().catch(err => console.error("Error batch syncing playlists:", err));
+        } else {
+            db.collection('users').doc(uid).set({
+                [key]: data,
+                lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true })
+            .catch(err => console.error(`Error syncing ${key} to cloud:`, err));
+        }
     }
 
     // ===== PERSISTENCE =====

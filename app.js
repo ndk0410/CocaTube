@@ -9,23 +9,76 @@ const App = (() => {
     const dom = {};
 
     // ===== STATE =====
-    let currentPage = 'home';
-    let searchDebounceTimer = null;
-    let isSearchActive = false;
-    let trendingData = [];
-    let contextMenuEl = null;
-    let isPlayingContextPlaylist = false; // Flag to stop auto-queuing random suggestions when playing a User Playlist
-    let unsubscribeSnapshot = null; // Store Firestore real-time listener
+    let currentPageParams = null; // Track current page parameters (e.g., playlistId)
+    let unsubscribeSnapshot = null; // Store Firestore real-time listener for user doc
+    let unsubscribePlaylists = null; // Store Firestore real-time listener for playlists collection
 
     // ===== INIT =====
 
     function init() {
         cacheDom();
+        initTVMode();
+        initKeyboardNavigation();
         initPlayer();
         bindEvents();
         initSettings();
         restorePlayerUI();
         navigateTo('home');
+    }
+
+    function initTVMode() {
+        const ua = navigator.userAgent.toLowerCase();
+        // Detect common TV platforms
+        if (ua.includes('web0s') || ua.includes('webos') || ua.includes('smarttv') || ua.includes('tizen')) {
+            document.body.classList.add('tv-mode');
+            console.log('TV mode activated');
+        }
+    }
+
+    function initKeyboardNavigation() {
+        document.addEventListener('keydown', (e) => {
+            const isInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+            if (isInput && e.key !== 'Escape') return;
+
+            // Handle D-pad / Arrow Keys for basic smooth scrolling into focus
+            // Browsers natively handle most spatial navigation leap if tabindex is reliable
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                setTimeout(() => {
+                    const active = document.activeElement;
+                    if (active && active !== document.body) {
+                        active.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                    }
+                }, 50); // slight delay to allow native focus to shift first
+            }
+
+            // Media Session / Hardware Keys fallback if native media session doesn't catch it
+            if (!isInput) {
+                switch (e.key) {
+                    case 'MediaPlayPause':
+                    case 'Unidentified': // Sometimes TV Remotes send Unidentified for Play/Pause
+                        const currentTrack = MusicPlayer.getCurrentTrack();
+                        if (currentTrack) {
+                            if (MusicPlayer.isPlaying()) MusicPlayer.pause();
+                            else MusicPlayer.play();
+                        }
+                        break;
+                    case 'MediaTrackNext':
+                        MusicPlayer.playNext();
+                        break;
+                    case 'MediaTrackPrevious':
+                        MusicPlayer.playPrevious();
+                        break;
+                }
+            }
+        });
+
+        // Initialize Native Media Session API for TV hardware media keys
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => MusicPlayer.play());
+            navigator.mediaSession.setActionHandler('pause', () => MusicPlayer.pause());
+            navigator.mediaSession.setActionHandler('previoustrack', () => MusicPlayer.playPrevious());
+            navigator.mediaSession.setActionHandler('nexttrack', () => MusicPlayer.playNext());
+        }
     }
 
     function initSettings() {
@@ -618,21 +671,18 @@ const App = (() => {
                     const cloudLiked = data.liked ? JSON.stringify(data.liked) : '[]';
                     const cloudPlaylists = data.playlists ? JSON.stringify(data.playlists) : '[]';
                     
-                    if (localHistory !== cloudHistory || localLiked !== cloudLiked || localPlaylists !== cloudPlaylists) {
-                        // Hydrate local state from cloud
+                    if (localHistory !== cloudHistory || localLiked !== cloudLiked) {
+                        // Hydrate local state from cloud (except playlists which handled below)
                         localStorage.setItem('music_history', cloudHistory);
                         localStorage.setItem('music_liked', cloudLiked);
-                        localStorage.setItem('music_playlists', cloudPlaylists);
                         
                         // Force player to reload the new local data into memory
                         if (window.MusicPlayer && window.MusicPlayer.reloadUserData) {
                             window.MusicPlayer.reloadUserData();
                         }
                         
-                        // console.log('Phát hiện dữ liệu Cloud thay đổi, đã đồng bộ về máy');
-                        
                         // Refresh current page if needed
-                        if (currentPage === 'library' || currentPage === 'liked' || currentPage === 'history' || currentPage === 'playlist') {
+                        if (currentPage === 'library' || currentPage === 'liked' || currentPage === 'history') {
                             navigateTo(currentPage);
                         }
                     }
@@ -642,23 +692,63 @@ const App = (() => {
                     const liked = JSON.parse(localStorage.getItem('music_liked') || '[]');
                     const playlists = JSON.parse(localStorage.getItem('music_playlists') || '[]');
                     
-                    window.firebaseDb.collection('users').doc(uid).set({
+                    const batch = window.firebaseDb.batch();
+                    const userRef = window.firebaseDb.collection('users').doc(uid);
+                    
+                    batch.set(userRef, {
                         history,
                         liked,
-                        playlists,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                         lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-                    }).then(() => {
-                        console.log('Khởi tạo dữ liệu người dùng mới trên Cloud');
-                        showToast('Đã tạo hồ sơ đám mây thành công!');
+                    });
+
+                    // Upload playlists to subcollection
+                    playlists.forEach(pl => {
+                        const plRef = userRef.collection('playlists').doc(pl.id);
+                        batch.set(plRef, pl);
+                    });
+
+                    batch.commit().then(() => {
+                        console.log('Khởi tạo dữ liệu người dùng mới trên Cloud (Subcollections)');
+                        showToast('Đã đồng bộ dữ liệu lên đám mây!');
                     });
                 }
                 
                 hideLoading();
             }, (error) => {
-                console.error('Lỗi onSnapshot:', error);
+                console.error('Lỗi onSnapshot User:', error);
                 showToast('Mất kết nối đồng bộ: Vui lòng kiểm tra mạng');
                 hideLoading();
+            });
+
+            // Granular Playlists listener
+            unsubscribePlaylists = window.firebaseDb.collection('users').doc(uid).collection('playlists').onSnapshot((snapshot) => {
+                const cloudPlaylists = [];
+                snapshot.forEach(doc => {
+                    cloudPlaylists.push(doc.data());
+                });
+
+                // Skip sync if this device just wrote to Cloud
+                const lastWrite = parseInt(localStorage.getItem('last_local_write') || '0');
+                if (Date.now() - lastWrite < 2000) return;
+
+                const localPlaylistsJson = localStorage.getItem('music_playlists') || '[]';
+                const cloudPlaylistsJson = JSON.stringify(cloudPlaylists);
+
+                if (localPlaylistsJson !== cloudPlaylistsJson) {
+                    localStorage.setItem('music_playlists', cloudPlaylistsJson);
+                    
+                    if (window.MusicPlayer && window.MusicPlayer.reloadUserData) {
+                        window.MusicPlayer.reloadUserData();
+                    }
+
+                    // Refresh if on library or specific playlist page
+                    if (currentPage === 'library' || (currentPage === 'playlist' && currentPageParams)) {
+                        navigateTo(currentPage, currentPageParams);
+                    }
+                }
+            }, (error) => {
+                console.error('Lỗi onSnapshot Playlists:', error);
             });
             
         } catch (error) {
@@ -694,6 +784,10 @@ const App = (() => {
             if (unsubscribeSnapshot) {
                 unsubscribeSnapshot();
                 unsubscribeSnapshot = null;
+            }
+            if (unsubscribePlaylists) {
+                unsubscribePlaylists();
+                unsubscribePlaylists = null;
             }
             await window.firebaseAuth.signOut();
             showToast('Đã đăng xuất thành công');
@@ -766,6 +860,7 @@ const App = (() => {
 
     function navigateTo(page, params) {
         currentPage = page;
+        currentPageParams = params;
         updateNavActive(page);
 
         switch (page) {
@@ -1104,7 +1199,7 @@ const App = (() => {
     function renderPlaylistSongRow(track, index, playlistId) {
         const playing = MusicPlayer.getCurrentTrack()?.id === track.id;
         return `
-            <div class="song-row ${playing ? 'playing' : ''}" data-action="play" data-track='${escapeAttr(JSON.stringify(track))}'>
+            <div class="song-row ${playing ? 'playing' : ''}" tabindex="0" data-action="play" data-track='${escapeAttr(JSON.stringify(track))}'>
                 <span class="song-row-index">${playing ? '<span class="material-icons-round" style="font-size:18px;color:var(--accent)">equalizer</span>' : (index + 1)}</span>
                 <div class="song-row-thumb">
                     <img src="${track.thumbnail || MusicAPI.getThumbnail(track.id)}" alt="" loading="lazy"
@@ -1258,7 +1353,7 @@ const App = (() => {
 
     function renderMusicCard(track) {
         return `
-            <div class="music-card" data-action="play" data-track='${escapeAttr(JSON.stringify(track))}'>
+            <div class="music-card" tabindex="0" data-action="play" data-track='${escapeAttr(JSON.stringify(track))}'>
                 <div class="music-card-thumb">
                     <img src="${track.thumbnail || MusicAPI.getThumbnail(track.id)}" alt="${escapeHtml(track.title)}" loading="lazy"
                          onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23272727%22 width=%221%22 height=%221%22/></svg>'">
@@ -1275,7 +1370,7 @@ const App = (() => {
     function renderSongRow(track, index) {
         const playing = MusicPlayer.getCurrentTrack()?.id === track.id;
         return `
-            <div class="song-row ${playing ? 'playing' : ''}" data-action="play" data-track='${escapeAttr(JSON.stringify(track))}'>
+            <div class="song-row ${playing ? 'playing' : ''}" tabindex="0" data-action="play" data-track='${escapeAttr(JSON.stringify(track))}'>
                 <span class="song-row-index">${playing ? '<span class="material-icons-round" style="font-size:18px;color:var(--accent)">equalizer</span>' : (index + 1)}</span>
                 <div class="song-row-thumb">
                     <img src="${track.thumbnail || MusicAPI.getThumbnail(track.id)}" alt="" loading="lazy"
@@ -1411,11 +1506,8 @@ const App = (() => {
                         const data = await MusicAPI.importPlaylist(url);
                         if (data && data.items && data.items.length > 0) {
                             const plId = MusicPlayer.createPlaylist(data.title || 'Playlist nhập từ YouTube');
-                            let count = 0;
-                            data.items.forEach(track => {
-                                if (MusicPlayer.addToPlaylist(plId, track)) count++;
-                            });
-                            showToast(`Đã nhập thành công ${count} bài hát vào "${data.title}"`);
+                            const added = MusicPlayer.addMultipleToPlaylist(plId, data.items);
+                            showToast(`Đã nhập thành công ${data.items.length} bài hát vào "${data.title}"`);
                             loadLibraryPage();
                         } else {
                             showToast('Không tìm thấy bài hát nào trong playlist này');

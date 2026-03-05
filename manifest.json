@@ -9,15 +9,15 @@
     "orientation": "portrait-primary",
     "icons": [
         {
-            "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='192' height='192'><circle cx='12' cy='12' r='12' fill='%231d1d1d'/><circle cx='12' cy='12' r='8' fill='none' stroke='%23ff0000' stroke-width='1.5'/><polygon points='10,8 15,12 10,16' fill='%23ff0000'/></svg>",
+            "src": "logo.png",
             "sizes": "192x192",
-            "type": "image/svg+xml",
+            "type": "image/png",
             "purpose": "any maskable"
         },
         {
-            "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='512' height='512'><circle cx='12' cy='12' r='12' fill='%231d1d1d'/><circle cx='12' cy='12' r='8' fill='none' stroke='%23ff0000' stroke-width='1.5'/><polygon points='10,8 15,12 10,16' fill='%23ff0000'/></svg>",
+            "src": "logo.png",
             "sizes": "512x512",
-            "type": "image/svg+xml",
+            "type": "image/png",
             "purpose": "any maskable"
         }
     ]
