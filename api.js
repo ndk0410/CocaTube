@@ -110,13 +110,13 @@ const MusicAPI = (() => {
 
     // ===== TRENDING =====
 
-    async function getTrending(region = 'VN') {
-        const cacheKey = `trending:${region}`;
+    async function getTrending(region = 'VN', type = 'youtube') {
+        const cacheKey = `trending:${region}:${type}`;
         const cached = getCached(cacheKey);
         if (cached) return cached;
 
         try {
-            const data = await fetchJSON(`${API_BASE}/trending?region=${region}`);
+            const data = await fetchJSON(`${API_BASE}/trending?region=${region}&type=${type}`);
             const results = Array.isArray(data) ? data : [];
             setCache(cacheKey, results);
             return results;

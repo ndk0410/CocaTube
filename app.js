@@ -915,18 +915,21 @@ const App = (() => {
         container.innerHTML = '';
 
         try {
-            // Trending
-            trendingData = await MusicAPI.getTrending('VN');
+            // Fetch both trending types in parallel
+            const [youtubeTrending, tiktokTrending] = await Promise.all([
+                MusicAPI.getTrending('VN', 'youtube'),
+                MusicAPI.getTrending('VN', 'tiktok')
+            ]);
 
             let html = '';
 
-            // Quick Picks
-            if (trendingData.length > 0) {
-                const quickPicks = trendingData.slice(0, 16);
+            // Top Trending YouTube (Quick Picks)
+            if (youtubeTrending.length > 0) {
+                const quickPicks = youtubeTrending.slice(0, 12);
                 html += `
                     <div class="section fade-in">
                         <div class="section-header">
-                            <h2 class="section-title">Lựa chọn nhanh</h2>
+                            <h2 class="section-title">Xu hướng YouTube</h2>
                         </div>
                         <div class="song-list quick-picks-grid">
                             ${quickPicks.map((track, i) => renderSongRow(track, i)).join('')}
@@ -935,7 +938,20 @@ const App = (() => {
                 `;
             }
 
-            // Trending section removed as per user request to avoid duplication with Quick Picks
+            // Top Trending TikTok
+            if (tiktokTrending.length > 0) {
+                const tiktokPicks = tiktokTrending.slice(0, 10);
+                html += `
+                    <div class="section fade-in" style="animation-delay: 0.1s">
+                        <div class="section-header">
+                            <h2 class="section-title">Nhạc TikTok Hot</h2>
+                        </div>
+                        <div class="scroll-row">
+                            ${tiktokPicks.map(track => renderMusicCard(track)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
 
             // Music Categories
             html += `

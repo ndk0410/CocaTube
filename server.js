@@ -86,19 +86,19 @@ async function handleSearch(query, filter) {
 }
 
 // Trending (search-based since ytsr doesn't have trending endpoint)
-async function handleTrending(region) {
-    const cacheKey = `trending:${region}`;
+async function handleTrending(region, type = 'youtube') {
+    const cacheKey = `trending:${region}:${type}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
 
     if (!ytsr) throw new Error('ytsr not available');
 
-    // Simulate trending by searching for popular music
-    const queries = [
-        'nhạc trending Việt Nam mới nhất',
-        'bài hát hot nhất hiện nay'
-    ];
+    // Simulate trending by searching for popular music based on type
+    const queries = type === 'tiktok' 
+        ? ['nhạc tiktok mới nhất 2026', 'tiktok trending music việt nam', 'top nhạc tiktok remix'] 
+        : ['nhạc trending Việt Nam mới nhất', 'bài hát hot nhất hiện nay', 'youtube music trending vietnam'];
 
+    let allResults = [];
     const resultsArr = await Promise.all(queries.map(q => 
         ytsr(q, { limit: 20 }).catch(e => {
             console.error(`[API] Trending search failed for "${q}":`, e.message);
@@ -288,8 +288,9 @@ async function handleApiRequest(req, res, parsedUrl) {
 
         } else if (pathname === '/api/trending') {
             const region = params.region || 'VN';
-            data = await handleTrending(region);
-            console.log(`[API] Trending (${region}) → ${data.length} results`);
+            const type = params.type || 'youtube';
+            data = await handleTrending(region, type);
+            console.log(`[API] Trending (${region}, ${type}) → ${data.length} results`);
 
         } else if (pathname === '/api/suggestions') {
             const query = params.query || params.q || '';
