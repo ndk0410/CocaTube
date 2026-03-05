@@ -49,9 +49,6 @@ const MusicPlayer = (() => {
         // Setup HTML5 Audio Player for background playback
         setupAudioPlayer();
 
-        // Auto-switch to Audio mode when screen is off for background playback
-        setupBackgroundAutoSwitch();
-
         // Load YouTube IFrame API
         const tag = document.createElement('script');
         tag.src = 'https://www.youtube.com/iframe_api';
