@@ -24,6 +24,9 @@ const App = (() => {
         initSettings();
         restorePlayerUI();
         navigateTo('home');
+
+        // Safety timeout for loading screen (10 seconds)
+        setTimeout(() => hideLoading(), 10000);
     }
 
     function initTVMode() {
@@ -412,8 +415,10 @@ const App = (() => {
 
         // Volume
         dom.volumeSlider.addEventListener('input', (e) => {
-            MusicPlayer.setVolume(parseInt(e.target.value));
-            updateVolumeIcon(parseInt(e.target.value));
+            const vol = parseInt(e.target.value);
+            MusicPlayer.setVolume(vol);
+            updateVolumeIcon(vol);
+            updateVolumeSliderFill(vol);
         });
         dom.volumeBtn.addEventListener('click', () => {
             MusicPlayer.toggleMute();
@@ -1813,6 +1818,10 @@ const App = (() => {
         dom.volumeBtn.querySelector('.material-icons-round').textContent = icon;
     }
 
+    function updateVolumeSliderFill(vol) {
+        dom.volumeSlider.style.setProperty('--volume-percent', vol + '%');
+    }
+
     function updateLikeButton(trackId) {
         const liked = MusicPlayer.isLiked(trackId);
         const icon = liked ? 'favorite' : 'favorite_border';
@@ -1837,6 +1846,7 @@ const App = (() => {
         const vol = MusicPlayer.getVolume();
         dom.volumeSlider.value = vol;
         updateVolumeIcon(vol);
+        updateVolumeSliderFill(vol);
     }
 
     // ===== QUEUE UI =====
@@ -1990,6 +2000,7 @@ const App = (() => {
                     MusicPlayer.setVolume(vol2);
                     dom.volumeSlider.value = vol2;
                     updateVolumeIcon(vol2);
+                    updateVolumeSliderFill(vol2);
                 }
                 break;
             case 'KeyF':
@@ -2008,7 +2019,10 @@ const App = (() => {
     }
 
     function hideLoading() {
-        dom.loadingContainer.classList.add('hidden');
+        if (dom.loadingContainer) {
+            dom.loadingContainer.classList.add('hidden');
+            console.log('[App] Loading hidden');
+        }
     }
 
     function showCreatePlaylistDialog(onConfirm, defaultValue = '', title = 'Tạo playlist mới') {

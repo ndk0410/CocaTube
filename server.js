@@ -99,28 +99,29 @@ async function handleTrending(region) {
         'bài hát hot nhất hiện nay'
     ];
 
-    let allResults = [];
-    for (const q of queries) {
-        try {
-            const results = await ytsr(q, { limit: 20 });
-            const items = results.items
-                .filter(item => item.type === 'video')
-                .map(item => ({
-                    id: item.id,
-                    title: item.title || 'Không có tiêu đề',
-                    artist: item.author ? item.author.name : 'Không rõ nghệ sĩ',
-                    duration: parseDuration(item.duration),
-                    durationText: item.duration || '0:00',
-                    thumbnail: item.bestThumbnail ? item.bestThumbnail.url : `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`,
-                    views: item.views || 0,
-                    uploaded: item.uploadedAt || '',
-                    uploaderUrl: item.author ? item.author.url : ''
-                }));
-            allResults = allResults.concat(items);
-        } catch (e) {
+    const resultsArr = await Promise.all(queries.map(q => 
+        ytsr(q, { limit: 20 }).catch(e => {
             console.error(`[API] Trending search failed for "${q}":`, e.message);
-        }
-    }
+            return { items: [] };
+        })
+    ));
+
+    resultsArr.forEach(results => {
+        const items = results.items
+            .filter(item => item.type === 'video')
+            .map(item => ({
+                id: item.id,
+                title: item.title || 'Không có tiêu đề',
+                artist: item.author ? item.author.name : 'Không rõ nghệ sĩ',
+                duration: parseDuration(item.duration),
+                durationText: item.duration || '0:00',
+                thumbnail: item.bestThumbnail ? item.bestThumbnail.url : `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`,
+                views: item.views || 0,
+                uploaded: item.uploadedAt || '',
+                uploaderUrl: item.author ? item.author.url : ''
+            }));
+        allResults = allResults.concat(items);
+    });
 
     // Remove duplicates
     const seen = new Set();
