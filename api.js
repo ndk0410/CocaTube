@@ -179,11 +179,15 @@ const MusicAPI = (() => {
     async function importPlaylist(url) {
         if (!url || !url.trim()) return null;
         try {
-            const data = await fetchJSON(`${API_BASE}/playlist?url=${encodeURIComponent(url.trim())}`);
+            const response = await fetch(`${API_BASE}/playlist?url=${encodeURIComponent(url.trim())}`);
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Link không hợp lệ hoặc lỗi kết nối');
+            }
             return data;
         } catch (e) {
             console.error('Import playlist failed:', e);
-            throw new Error('Link không hợp lệ hoặc lỗi kết nối');
+            throw e;
         }
     }
 

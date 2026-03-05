@@ -883,6 +883,7 @@ const MusicPlayer = (() => {
         deletePlaylist,
         renamePlaylist,
         addToPlaylist,
+        addMultipleToPlaylist,
         removeFromPlaylist,
         getPlaylist,
         reloadUserData,

@@ -159,12 +159,28 @@ async function handleSuggestions(query) {
 async function handlePlaylist(url) {
     if (!ytpl) throw new Error('ytpl not available');
 
-    const cacheKey = `playlist:${url}`;
+    // Clean URL
+    let cleanUrl = url.trim();
+    
+    const cacheKey = `playlist:${cleanUrl}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
 
     try {
-        const playlistId = await ytpl.getPlaylistID(url);
+        let playlistId;
+        if (ytpl.validateID(cleanUrl)) {
+            playlistId = cleanUrl;
+        } else {
+            try {
+                playlistId = await ytpl.getPlaylistID(cleanUrl);
+            } catch (e) {
+                // Fallback: manual extraction if ytpl helper fails
+                const match = cleanUrl.match(/[?&]list=([^#\&\?]+)/);
+                if (match) playlistId = match[1];
+                else throw e;
+            }
+        }
+
         const playlist = await ytpl(playlistId, { limit: 100 });
         
         const data = {
@@ -184,7 +200,11 @@ async function handlePlaylist(url) {
         setCache(cacheKey, data);
         return data;
     } catch (e) {
-        throw new Error('Link playlist không hợp lệ hoặc playlist ở chế độ riêng tư');
+        console.error('handlePlaylist error:', e);
+        if (e.message && e.message.includes('private')) {
+            throw new Error('Playlist này đang ở chế độ riêng tư, không thể lấy dữ liệu');
+        }
+        throw new Error('Link playlist không hợp lệ hoặc không tìm thấy nội dung');
     }
 }
 

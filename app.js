@@ -1518,23 +1518,31 @@ const App = (() => {
             case 'import-playlist': {
                 e.preventDefault();
                 showCreatePlaylistDialog(async (url) => {
-                    if (!url.includes('youtube.com') && !url.includes('youtu.be')) {
-                        showToast('Link không hợp lệ! Vui lòng nhập link YouTube');
+                    if (!url) return;
+                    
+                    const cleanUrl = url.trim();
+                    if (!cleanUrl.includes('youtube.com/') && !cleanUrl.includes('youtu.be/') && !/^[a-zA-Z0-9_-]{10,}$/.test(cleanUrl)) {
+                        showToast('Link không hợp lệ! Vui lòng nhập link YouTube Playlist hoặc ID');
                         return;
                     }
+                    
                     showLoading();
+                    showToast('Đang quét playlist từ YouTube...');
+                    
                     try {
-                        const data = await MusicAPI.importPlaylist(url);
+                        const data = await MusicAPI.importPlaylist(cleanUrl);
                         if (data && data.items && data.items.length > 0) {
-                            const plId = MusicPlayer.createPlaylist(data.title || 'Playlist nhập từ YouTube');
-                            const added = MusicPlayer.addMultipleToPlaylist(plId, data.items);
-                            showToast(`Đã nhập thành công ${data.items.length} bài hát vào "${data.title}"`);
+                            const plName = data.title || 'Playlist nhập từ YouTube';
+                            const plId = MusicPlayer.createPlaylist(plName);
+                            MusicPlayer.addMultipleToPlaylist(plId, data.items);
+                            showToast(`Đã nhập thành công ${data.items.length} bài hát vào "${plName}"`);
                             loadLibraryPage();
                         } else {
-                            showToast('Không tìm thấy bài hát nào trong playlist này');
+                            showToast('Không tìm thấy bài hát nào hoặc playlist trống');
                         }
                     } catch (err) {
-                        showToast(err.message || 'Lỗi khi nhập playlist');
+                        console.error('Import error:', err);
+                        showToast(err.message || 'Lỗi khi nhập playlist. Thử lại sau.');
                     } finally {
                         hideLoading();
                     }
