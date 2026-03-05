@@ -6,19 +6,14 @@
       "use": "@vercel/node"
     },
     {
-      "src": "*.css",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "*.js",
+      "src": "*.{css,js,html,png,jpg,jpeg,svg,ico,json,webmanifest}",
       "use": "@vercel/static",
       "config": {
-        "exclude": ["server.js"]
+        "exclude": [
+          "server.js",
+          "node_modules/**"
+        ]
       }
-    },
-    {
-      "src": "*.html",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
