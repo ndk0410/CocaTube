@@ -12,6 +12,7 @@ const App = (() => {
     let currentPageParams = null; // Track current page parameters (e.g., playlistId)
     let unsubscribeSnapshot = null; // Store Firestore real-time listener for user doc
     let unsubscribePlaylists = null; // Store Firestore real-time listener for playlists collection
+    let currentStrings = null; // Current translation strings
 
     // ===== INIT =====
 
@@ -23,7 +24,18 @@ const App = (() => {
         bindEvents();
         initSettings();
         restorePlayerUI();
-        navigateTo('home');
+
+        // Handle deep link
+        const urlParams = new URLSearchParams(window.location.search);
+        const videoId = urlParams.get('v');
+        if (videoId) {
+            handleDeepLink(videoId);
+        } else {
+            navigateTo('home');
+        }
+
+        // Handle back/forward
+        window.addEventListener('popstate', handlePopState);
 
         // Safety timeout for loading screen (10 seconds)
         setTimeout(() => hideLoading(), 10000);
@@ -109,10 +121,11 @@ const App = (() => {
             nav_library: 'Thư viện',
             nav_history: 'Lịch sử',
             nav_liked: 'Đã thích',
-            search_placeholder: 'Tìm kiếm bài hát, nghệ sĩ...',
+            search_placeholder: 'Tìm kiếm video, bài hát, nghệ sĩ...',
             login_btn: 'Đăng nhập',
             logout_btn: 'Đăng xuất',
             login_title: 'Đăng nhập / Đăng ký',
+            live_label: 'TRỰC TIẾP',
         },
         en: {
             settings_title: 'Settings',
@@ -125,10 +138,11 @@ const App = (() => {
             nav_library: 'Library',
             nav_history: 'History',
             nav_liked: 'Liked',
-            search_placeholder: 'Search songs, artists...',
+            search_placeholder: 'Search videos, songs, artists...',
             login_btn: 'Sign in',
             logout_btn: 'Sign out',
             login_title: 'Sign in / Register',
+            live_label: 'LIVE',
         },
         zh: {
             settings_title: '设置',
@@ -141,15 +155,17 @@ const App = (() => {
             nav_library: '音乐库',
             nav_history: '历史',
             nav_liked: '已喜欢',
-            search_placeholder: '搜索歌曲、艺术家...',
+            search_placeholder: '搜索视频、歌曲、艺术家...',
             login_btn: '登录',
             logout_btn: '退出',
             login_title: '登录 / 注册',
+            live_label: '直播',
         }
     };
 
     function setLanguage(lang) {
         const strings = i18n[lang] || i18n['vi'];
+        currentStrings = strings;
         localStorage.setItem('coca_lang', lang);
 
         document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -288,6 +304,14 @@ const App = (() => {
 
                 // Fetch related for auto-play
                 loadRelated(track.id);
+
+                // Update URL for deep linking
+                const currentV = new URLSearchParams(window.location.search).get('v');
+                if (currentV !== track.id) {
+                    const newUrl = new URL(window.location);
+                    newUrl.searchParams.set('v', track.id);
+                    window.history.pushState({ videoId: track.id }, '', newUrl);
+                }
             },
             onTimeUpdate: (time) => {
                 updateTimeUI(time);
@@ -444,6 +468,7 @@ const App = (() => {
             if (MusicPlayer.getCurrentTrack()) openFullscreenPlayer();
         });
         dom.fsCloseBtn.addEventListener('click', closeFullscreenPlayer);
+
         
         if(dom.fsModeSongBtn) dom.fsModeSongBtn.addEventListener('click', () => setVideoMode(false));
         if(dom.fsModeVideoBtn) dom.fsModeVideoBtn.addEventListener('click', () => setVideoMode(true));
@@ -1071,7 +1096,7 @@ const App = (() => {
                                 <span class="material-icons-round">queue_music</span>
                             </div>
                             <div class="playlist-card-name">${escapeHtml(pl.name)}</div>
-                            <div class="playlist-card-count">${pl.tracks.length} bài hát</div>
+                            <div class="playlist-card-count">${pl.tracks.length} mục</div>
                             <div class="playlist-card-actions">
                                 <button class="icon-btn" data-action="delete-playlist" data-playlist-id="${pl.id}" title="Xóa playlist">
                                     <span class="material-icons-round" style="font-size:18px">delete_outline</span>
@@ -1152,7 +1177,7 @@ const App = (() => {
                     </div>
                     <div class="playlist-header-info">
                         <h2>${escapeHtml(pl.name)}</h2>
-                        <p>${pl.tracks.length} bài hát</p>
+                        <p>${pl.tracks.length} mục</p>
                         <div class="playlist-header-actions">
                             ${pl.tracks.length > 0 ? `
                                 <button class="chip active" id="play-all-pl">
@@ -1231,7 +1256,9 @@ const App = (() => {
                 </div>
                 <div class="song-row-info">
                     <span class="song-row-title">${escapeHtml(track.title)}</span>
-                    <span class="song-row-artist">${escapeHtml(track.artist)}</span>
+                    <span class="song-row-artist">
+                        ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}${escapeHtml(track.artist)}${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
+                    </span>
                 </div>
                 <span class="song-row-duration">${track.durationText || MusicAPI.formatDuration(track.duration)}</span>
                 <div class="song-row-actions">
@@ -1338,7 +1365,7 @@ const App = (() => {
         let html = `
             <div class="section fade-in">
                 <p class="search-results-header">
-                    Kết quả cho <strong>"${escapeHtml(query)}"</strong> — ${results.length} bài hát
+                    Kết quả cho <strong>"${escapeHtml(query)}"</strong> — ${results.length} video
                 </p>
         `;
 
@@ -1383,7 +1410,9 @@ const App = (() => {
                     </div>
                 </div>
                 <div class="music-card-title" title="${escapeHtml(track.title)}">${escapeHtml(track.title)}</div>
-                <div class="music-card-subtitle">${escapeHtml(track.artist)}</div>
+                <div class="music-card-subtitle">
+                    ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}${escapeHtml(track.artist)}${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
+                </div>
             </div>
         `;
     }
@@ -1402,9 +1431,11 @@ const App = (() => {
                 </div>
                 <div class="song-row-info">
                     <span class="song-row-title">${escapeHtml(track.title)}</span>
-                    <span class="song-row-artist">${escapeHtml(track.artist)}</span>
+                    <span class="song-row-artist">
+                        ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}${escapeHtml(track.artist)}${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
+                    </span>
                 </div>
-                <span class="song-row-duration">${track.durationText || MusicAPI.formatDuration(track.duration)}</span>
+                <span class="song-row-duration">${track.isLive ? `<span class="live-text">${currentStrings.live_label}</span>` : (track.durationText || MusicAPI.formatDuration(track.duration))}</span>
                 <div class="song-row-actions">
                     <button class="icon-btn" data-action="add-queue" data-track='${escapeAttr(JSON.stringify(track))}' title="Thêm vào danh sách phát">
                         <span class="material-icons-round" style="font-size:20px">playlist_add</span>
@@ -2127,6 +2158,51 @@ const App = (() => {
     }
 
 
+
+    // ===== DEEP LINKING =====
+
+    async function handleDeepLink(videoId) {
+        showLoading();
+        try {
+            const details = await MusicAPI.getVideoDetails(videoId);
+            if (details && details.relatedStreams && details.relatedStreams.length > 0) {
+                // Find exact match or use the first result as fallback
+                const exactTrack = details.relatedStreams.find(t => t.id === videoId) || details.relatedStreams[0];
+                
+                // Clear queue and prepopulate with related
+                MusicPlayer.clearQueue();
+                details.relatedStreams.forEach(t => MusicPlayer.addToQueue(t));
+                
+                // Play it
+                MusicPlayer.playTrack(exactTrack);
+            }
+        } catch (e) {
+            console.error('Failed to load deep link:', e);
+            showToast('Không thể tải bài hát từ liên kết');
+        }
+        hideLoading();
+        navigateTo('home');
+    }
+
+    function handlePopState(e) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const videoId = urlParams.get('v');
+        if (videoId) {
+            const current = MusicPlayer.getCurrentTrack();
+            if (!current || current.id !== videoId) {
+                const queue = MusicPlayer.getQueue();
+                const index = queue.findIndex(t => t.id === videoId);
+                if (index !== -1) {
+                    MusicPlayer.playTrack(queue[index]);
+                } else {
+                    handleDeepLink(videoId);
+                }
+            }
+        } else {
+            // No video ID in URL -> returning to home without player focus
+            navigateTo('home');
+        }
+    }
 
     // ===== PUBLIC API =====
 

@@ -190,6 +190,12 @@ const MusicPlayer = (() => {
         if (!track || !track.id) return;
 
         currentTrack = track;
+        
+        // Auto-switch to video mode for live streams (audio extraction usually fails for live)
+        if (track.isLive) {
+            isVideoMode = true;
+            console.log('Live stream detected, switching to Video mode');
+        }
 
         // Always load into YouTube Player (primary player)
         if (isReady && ytPlayer) {
@@ -201,7 +207,8 @@ const MusicPlayer = (() => {
         }
 
         // Pre-fetch audio URL for HTML5 Audio (background playback ready)
-        if (audioPlayer) {
+        // Skip for live streams as we want to stay in Video mode (YouTube IFrame)
+        if (audioPlayer && !track.isLive) {
             fetchAudioUrl(track.id).then(audioUrl => {
                 if (audioUrl && currentTrack && currentTrack.id === track.id) {
                     audioPlayer.src = audioUrl;
@@ -379,32 +386,42 @@ const MusicPlayer = (() => {
 
     function startTimeUpdates() {
         stopTimeUpdates();
-        timeUpdateInterval = setInterval(() => {
-            let current = 0;
-            let duration = 0;
-            
-            if (isVideoMode) {
-                if (!isReady || !ytPlayer || !ytPlayer.getCurrentTime) return;
-                current = ytPlayer.getCurrentTime() || 0;
-                duration = ytPlayer.getDuration() || 0;
-            } else {
-                if (!audioPlayer) return;
-                current = audioPlayer.currentTime || 0;
-                duration = audioPlayer.duration || 0;
-                if (!isFinite(duration)) duration = 0;
-            }
+        let lastTime = 0;
 
-            onTimeUpdate({
-                current,
-                duration,
-                percent: duration > 0 ? (current / duration) * 100 : 0
-            });
-        }, 250);
+        function updateLoop(timestamp) {
+            if (timestamp - lastTime >= 50) {
+                lastTime = timestamp;
+                let current = 0;
+                let duration = 0;
+                
+                if (isVideoMode) {
+                    if (isReady && ytPlayer && ytPlayer.getCurrentTime) {
+                        current = ytPlayer.getCurrentTime() || 0;
+                        duration = ytPlayer.getDuration() || 0;
+                    }
+                } else {
+                    if (audioPlayer) {
+                        current = audioPlayer.currentTime || 0;
+                        duration = audioPlayer.duration || 0;
+                        if (!isFinite(duration)) duration = 0;
+                    }
+                }
+
+                onTimeUpdate({
+                    current,
+                    duration,
+                    percent: duration > 0 ? (current / duration) * 100 : 0
+                });
+            }
+            timeUpdateInterval = requestAnimationFrame(updateLoop);
+        }
+
+        timeUpdateInterval = requestAnimationFrame(updateLoop);
     }
 
     function stopTimeUpdates() {
         if (timeUpdateInterval) {
-            clearInterval(timeUpdateInterval);
+            cancelAnimationFrame(timeUpdateInterval);
             timeUpdateInterval = null;
         }
     }

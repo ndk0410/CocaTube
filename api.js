@@ -27,18 +27,26 @@ const MusicAPI = (() => {
         }
     }
 
-    async function fetchJSON(url, timeout = 20000) {
-        const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), timeout);
-        try {
-            const res = await fetch(url, { signal: controller.signal });
-            clearTimeout(id);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-        } catch (e) {
-            clearTimeout(id);
-            throw e;
+    async function fetchJSON(url, timeout = 20000, maxRetries = 2) {
+        let lastError = null;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const res = await fetch(url, { signal: controller.signal });
+                clearTimeout(id);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            } catch (e) {
+                clearTimeout(id);
+                lastError = e;
+                if (attempt < maxRetries) {
+                    console.warn(`[Retry ${attempt + 1}/${maxRetries}] Fetch failed: ${url}`, e);
+                    await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // Exponential backoff
+                }
+            }
         }
+        throw lastError;
     }
 
     // ===== HELPERS =====
@@ -78,7 +86,7 @@ const MusicAPI = (() => {
 
     // ===== SEARCH =====
 
-    async function search(query, filter = 'music_songs') {
+    async function search(query, filter = 'all') {
         if (!query || !query.trim()) return [];
 
         const cacheKey = `search:${query}:${filter}`;

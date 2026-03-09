@@ -63,7 +63,7 @@ async function handleSearch(query, filter) {
     if (!ytsr) throw new Error('ytsr not available');
 
     const options = { limit: 30 };
-    const searchQuery = filter === 'music_songs' ? `${query} music` : query;
+    const searchQuery = query;
 
     const results = await ytsr(searchQuery, options);
 
@@ -77,6 +77,7 @@ async function handleSearch(query, filter) {
             durationText: item.duration || '0:00',
             thumbnail: item.bestThumbnail ? item.bestThumbnail.url : `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`,
             views: item.views || 0,
+            isLive: item.isLive || item.duration === null || item.durationText === '0:00',
             uploaded: item.uploadedAt || '',
             uploaderUrl: item.author ? item.author.url : ''
         }));
@@ -93,10 +94,10 @@ async function handleTrending(region, type = 'youtube') {
 
     if (!ytsr) throw new Error('ytsr not available');
 
-    // Simulate trending by searching for popular music based on type
+    // Simulate trending by searching for popular content based on type
     const queries = type === 'tiktok' 
         ? ['nhạc tiktok mới nhất 2026', 'tiktok trending music việt nam', 'top nhạc tiktok remix'] 
-        : ['nhạc trending Việt Nam mới nhất', 'bài hát hot nhất hiện nay', 'youtube music trending vietnam'];
+        : ['xu hướng youtube việt nam mới nhất', 'video hot nhất hiện nay', 'youtube trending vietnam'];
 
     let allResults = [];
     const resultsArr = await Promise.all(queries.map(q => 
@@ -117,6 +118,7 @@ async function handleTrending(region, type = 'youtube') {
                 durationText: item.duration || '0:00',
                 thumbnail: item.bestThumbnail ? item.bestThumbnail.url : `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`,
                 views: item.views || 0,
+                isLive: item.isLive || item.duration === null || item.durationText === '0:00',
                 uploaded: item.uploadedAt || '',
                 uploaderUrl: item.author ? item.author.url : ''
             }));
@@ -371,7 +373,15 @@ function handleStaticFile(req, res, parsedUrl) {
             return;
         }
 
-        res.writeHead(200, { 'Content-Type': contentType });
+        let cacheControl = 'no-cache';
+        if (ext === '.css' || ext === '.js' || ext === '.jpg' || ext === '.png' || ext === '.svg' || ext === '.json' || ext === '.woff2') {
+            cacheControl = 'public, max-age=604800'; // Cache cho 7 ngày
+        }
+
+        res.writeHead(200, { 
+            'Content-Type': contentType,
+            'Cache-Control': cacheControl 
+        });
         res.end(data);
     });
 }
