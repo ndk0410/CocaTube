@@ -27,9 +27,23 @@ const App = (() => {
 
         // Handle deep link
         const urlParams = new URLSearchParams(window.location.search);
+        
+        // Anti-cache: Unregister Service Worker if it exists (causes dev issues)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                for (let registration of registrations) {
+                    registration.unregister();
+                }
+            });
+        }
+
         const videoId = urlParams.get('v');
+        const channelId = urlParams.get('c');
+        
         if (videoId) {
             handleDeepLink(videoId);
+        } else if (channelId) {
+            navigateTo('channel', { id: channelId });
         } else {
             navigateTo('home');
         }
@@ -305,13 +319,8 @@ const App = (() => {
                 // Fetch related for auto-play
                 loadRelated(track.id);
 
-                // Update URL for deep linking
-                const currentV = new URLSearchParams(window.location.search).get('v');
-                if (currentV !== track.id) {
-                    const newUrl = new URL(window.location);
-                    newUrl.searchParams.set('v', track.id);
-                    window.history.pushState({ videoId: track.id }, '', newUrl);
-                }
+                // Mute URL updating to keep address bar clean
+                // The URL will remain http://localhost:3000/ unless explicitly linked
             },
             onTimeUpdate: (time) => {
                 updateTimeUI(time);
@@ -395,6 +404,16 @@ const App = (() => {
                 e.preventDefault();
                 navigateTo(el.dataset.page);
             });
+        });
+
+        // Author channel clicks (Event Delegation)
+        document.addEventListener('click', (e) => {
+            const authorLink = e.target.closest('.author-link');
+            if (authorLink && authorLink.dataset.channelId) {
+                e.preventDefault();
+                e.stopPropagation();
+                navigateTo('channel', { id: authorLink.dataset.channelId });
+            }
         });
 
         dom.logoLink.addEventListener('click', (e) => {
@@ -503,10 +522,15 @@ const App = (() => {
         document.addEventListener('keydown', handleKeyboard);
 
         // Close sidebar overlay on resize
+        // Debounced resize handler for performance
+        let resizeTimer;
         window.addEventListener('resize', () => {
-            if (window.innerWidth > 1024) {
-                dom.sidebar.classList.remove('open');
-            }
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (window.innerWidth > 1024) {
+                    dom.sidebar.classList.remove('open');
+                }
+            }, 150);
         });
 
         // ===== AUTHENTICATION EVENTS =====
@@ -912,6 +936,9 @@ const App = (() => {
             case 'playlist':
                 loadPlaylistPage(params);
                 break;
+            case 'channel':
+                loadChannelPage(params ? params.id : null);
+                break;
             case 'search':
                 // Search handled by performSearch
                 break;
@@ -1242,6 +1269,63 @@ const App = (() => {
         hideLoading();
     }
 
+    async function loadChannelPage(channelId) {
+        if (!channelId) {
+            navigateTo('home');
+            return;
+        }
+
+        showLoading();
+        const container = dom.pageContainer;
+        container.innerHTML = '';
+
+        try {
+            const data = await MusicAPI.getChannel(channelId);
+            if (!data) throw new Error('Không thể tải kênh');
+
+            let html = `
+                <div class="channel-page fade-in">
+                    ${data.banner ? `
+                        <div class="channel-banner">
+                            <img src="${data.banner}" alt="Banner" loading="lazy" decoding="async">
+                        </div>
+                    ` : '<div class="channel-banner-placeholder"></div>'}
+                    
+                    <div class="channel-header">
+                        <div class="channel-header-info">
+                            <img src="${data.thumbnail}" alt="${data.title}" class="channel-avatar" loading="lazy" decoding="async">
+                            <div class="channel-meta">
+                                <h1 class="channel-title">${escapeHtml(data.title)}</h1>
+                                ${data.subscriberCount ? `<span class="channel-subs">${data.subscriberCount} người đăng ký</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="channel-actions">
+                            <button class="chip active">Đăng ký</button>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-header">
+                            <h2 class="section-title">Video gần đây</h2>
+                        </div>
+                        <div class="song-list">
+                            ${data.items.map((track, i) => renderSongRow(track, i)).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+
+            // URL updating disabled to keep address bar clean
+
+        } catch (e) {
+            console.error('Load channel failed:', e);
+            renderError('Không thể tải thông tin kênh. Vui lòng thử lại.');
+        }
+
+        hideLoading();
+    }
+
     function renderPlaylistSongRow(track, index, playlistId) {
         const playing = MusicPlayer.getCurrentTrack()?.id === track.id;
         return `
@@ -1257,7 +1341,7 @@ const App = (() => {
                 <div class="song-row-info">
                     <span class="song-row-title">${escapeHtml(track.title)}</span>
                     <span class="song-row-artist">
-                        ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}${escapeHtml(track.artist)}${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
+                        ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}<a href="#" class="author-link" data-channel-id="${getUploaderId(track)}">${escapeHtml(track.artist)}</a>${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
                     </span>
                 </div>
                 <span class="song-row-duration">${track.durationText || MusicAPI.formatDuration(track.duration)}</span>
@@ -1411,7 +1495,7 @@ const App = (() => {
                 </div>
                 <div class="music-card-title" title="${escapeHtml(track.title)}">${escapeHtml(track.title)}</div>
                 <div class="music-card-subtitle">
-                    ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}${escapeHtml(track.artist)}${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
+                    ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}<a href="#" class="author-link" data-channel-id="${getUploaderId(track)}">${escapeHtml(track.artist)}</a>${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
                 </div>
             </div>
         `;
@@ -1432,7 +1516,7 @@ const App = (() => {
                 <div class="song-row-info">
                     <span class="song-row-title">${escapeHtml(track.title)}</span>
                     <span class="song-row-artist">
-                        ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}${escapeHtml(track.artist)}${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
+                        ${track.isLive ? `<span class="live-badge">((•)) ${currentStrings.live_label}</span> ` : ''}<a href="#" class="author-link" data-channel-id="${getUploaderId(track)}">${escapeHtml(track.artist)}</a>${track.views ? ' • ' + MusicAPI.formatViews(track.views) : ''}
                     </span>
                 </div>
                 <span class="song-row-duration">${track.isLive ? `<span class="live-text">${currentStrings.live_label}</span>` : (track.durationText || MusicAPI.formatDuration(track.duration))}</span>
@@ -1484,6 +1568,7 @@ const App = (() => {
     // ===== CONTENT CLICK HANDLER =====
 
     function handleContentClick(e) {
+        if (e.target.closest('.author-link')) return; // Ignore author link clicks so they can be handled by delegation
         const target = e.target.closest('[data-action]');
         if (!target) return;
 
@@ -1818,12 +1903,12 @@ const App = (() => {
         // Player bar
         dom.playerThumbnail.src = thumb;
         dom.playerSongTitle.textContent = track.title;
-        dom.playerSongArtist.textContent = track.artist;
+        dom.playerSongArtist.innerHTML = `<a href="#" class="author-link" data-channel-id="${getUploaderId(track)}">${escapeHtml(track.artist)}</a>`;
 
         // Fullscreen player
         dom.fsThumbnail.src = MusicAPI.getThumbnail(track.id, 'high');
         dom.fsSongTitle.textContent = track.title;
-        dom.fsSongArtist.textContent = track.artist;
+        dom.fsSongArtist.innerHTML = `<a href="#" class="author-link" data-channel-id="${getUploaderId(track)}">${escapeHtml(track.artist)}</a>`;
 
         // Like button
         updateLikeButton(track.id);
@@ -2157,7 +2242,21 @@ const App = (() => {
                   .replace(/>/g, '&gt;');
     }
 
-
+    function getUploaderId(track) {
+        if (track.uploaderId) return track.uploaderId;
+        if (track.uploaderUrl) {
+            // Extract from https://www.youtube.com/channel/UC...
+            const match = track.uploaderUrl.match(/\/channel\/([^\/?#]+)/);
+            if (match) return match[1];
+            // Extract from https://www.youtube.com/@handle
+            const handleMatch = track.uploaderUrl.match(/\/(@[^\/?#]+)/);
+            if (handleMatch) return handleMatch[1];
+            // Extract from https://www.youtube.com/user/NAME
+            const userMatch = track.uploaderUrl.match(/\/user\/([^\/?#]+)/);
+            if (userMatch) return userMatch[1];
+        }
+        return '';
+    }
 
     // ===== DEEP LINKING =====
 
@@ -2181,12 +2280,13 @@ const App = (() => {
             showToast('Không thể tải bài hát từ liên kết');
         }
         hideLoading();
-        navigateTo('home');
     }
 
     function handlePopState(e) {
         const urlParams = new URLSearchParams(window.location.search);
         const videoId = urlParams.get('v');
+        const channelId = urlParams.get('c');
+
         if (videoId) {
             const current = MusicPlayer.getCurrentTrack();
             if (!current || current.id !== videoId) {
@@ -2198,8 +2298,10 @@ const App = (() => {
                     handleDeepLink(videoId);
                 }
             }
+        } else if (channelId) {
+            navigateTo('channel', { id: channelId });
         } else {
-            // No video ID in URL -> returning to home without player focus
+            // No video or channel ID in URL -> returning to home
             navigateTo('home');
         }
     }
@@ -2220,7 +2322,8 @@ window.__onGCastApiAvailable = function(isAvailable) {
     }
 };
 
-// ===== SERVICE WORKER FOR PWA =====
+// Service Worker registration disabled for now to avoid caching issues during development
+/*
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
@@ -2228,6 +2331,7 @@ if ('serviceWorker' in navigator) {
             .catch(err => console.error('Service Worker registration failed:', err));
     });
 }
+*/
 
 // ===== START APP =====
 document.addEventListener('DOMContentLoaded', () => {

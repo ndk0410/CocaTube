@@ -199,6 +199,22 @@ const MusicAPI = (() => {
         }
     }
 
+    async function getChannel(channelId) {
+        if (!channelId) return null;
+        const cacheKey = `channel:${channelId}`;
+        const cached = getCached(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const data = await fetchJSON(`${API_BASE}/channel?id=${encodeURIComponent(channelId)}`);
+            setCache(cacheKey, data);
+            return data;
+        } catch (e) {
+            console.error('Get channel failed:', e);
+            return null;
+        }
+    }
+
     // ===== PUBLIC API =====
 
     return {
@@ -212,6 +228,7 @@ const MusicAPI = (() => {
         formatDuration,
         formatViews,
         extractVideoId,
-        importPlaylist
+        importPlaylist,
+        getChannel
     };
 })();

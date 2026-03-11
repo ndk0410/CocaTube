@@ -7,6 +7,24 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const zlib = require('zlib');
+
+// Gzip helper: compress response if client supports it
+function sendCompressed(req, res, statusCode, headers, body) {
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    if (acceptEncoding.includes('gzip')) {
+        zlib.gzip(body, (err, compressed) => {
+            if (err) { res.writeHead(statusCode, headers); res.end(body); return; }
+            headers['Content-Encoding'] = 'gzip';
+            headers['Vary'] = 'Accept-Encoding';
+            res.writeHead(statusCode, headers);
+            res.end(compressed);
+        });
+    } else {
+        res.writeHead(statusCode, headers);
+        res.end(body);
+    }
+}
 
 let ytsr, ytpl, ytdl;
 try { 
@@ -79,7 +97,8 @@ async function handleSearch(query, filter) {
             views: item.views || 0,
             isLive: item.isLive || item.duration === null || item.durationText === '0:00',
             uploaded: item.uploadedAt || '',
-            uploaderUrl: item.author ? item.author.url : ''
+            uploaderUrl: item.author ? item.author.url : '',
+            uploaderId: item.author ? item.author.channelID : ''
         }));
 
     setCache(cacheKey, items);
@@ -120,7 +139,8 @@ async function handleTrending(region, type = 'youtube') {
                 views: item.views || 0,
                 isLive: item.isLive || item.duration === null || item.durationText === '0:00',
                 uploaded: item.uploadedAt || '',
-                uploaderUrl: item.author ? item.author.url : ''
+                uploaderUrl: item.author ? item.author.url : '',
+                uploaderId: item.author ? item.author.channelID : ''
             }));
         allResults = allResults.concat(items);
     });
@@ -207,6 +227,97 @@ async function handlePlaylist(url) {
             throw new Error('Playlist này đang ở chế độ riêng tư, không thể lấy dữ liệu');
         }
         throw new Error('Link playlist không hợp lệ hoặc không tìm thấy nội dung');
+    }
+}
+
+// Channel Uploads
+async function handleChannel(channelId) {
+    if (!channelId) throw new Error('Missing channel id');
+    
+    const cacheKey = `channel:${channelId}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+
+    try {
+        let actualChannelId = channelId;
+        const play = require('play-dl');
+        
+        // If it doesn't look like a standard YouTube Channel ID (UC...), resolve it
+        if (!channelId.startsWith('UC')) {
+            try {
+                // If it's likely a video ID (11 chars), use ytdl to get author channel
+                if (channelId.length === 11 && !channelId.startsWith('@')) {
+                    const info = await ytdl.getBasicInfo(channelId);
+                    if (info && info.videoDetails && info.videoDetails.author) {
+                        actualChannelId = info.videoDetails.author.id;
+                    }
+                } else {
+                    // It's a handle or name, use play-dl search for channel
+                    const searchResults = await play.search(channelId, { limit: 1, source: { youtube: 'channel' } });
+                    if (searchResults && searchResults.length > 0) {
+                        actualChannelId = searchResults[0].id;
+                    }
+                }
+            } catch (resolveErr) {
+                console.warn(`Resolution failed for ${channelId}:`, resolveErr);
+            }
+        }
+
+        // Ensure we got a valid ID starting with UC
+        if (!actualChannelId || !actualChannelId.startsWith('UC')) {
+            throw new Error(`Invalid or unresolved channel ID: ${actualChannelId}`);
+        }
+
+        // Youtubers' Uploads playlist ID is generally UU + channel ID characters after UC
+        const uploadsPlaylistId = 'UU' + actualChannelId.substring(2);
+
+        // Fetch playlist using play-dl (bypass ytpl token issues)
+        const pl = await play.playlist_info(uploadsPlaylistId, { incomplete: true });
+        const videos = await pl.all_videos();
+        
+        let channelName = pl.channel && pl.channel.name ? pl.channel.name : 'Unknown';
+        let channelAvatar = null;
+        let subscriberCount = null;
+        let channelBanner = null;
+
+        // Extract high-quality avatar and sub count from the first video via ytdl-core
+        if (videos.length > 0) {
+            try {
+                const firstVideoInfo = await ytdl.getBasicInfo(videos[0].url);
+                const author = firstVideoInfo.videoDetails.author;
+                if (author) {
+                    channelName = author.name || channelName;
+                    channelAvatar = author.thumbnails && author.thumbnails.length > 0 ? author.thumbnails[author.thumbnails.length - 1].url : null;
+                    subscriberCount = author.subscriber_count;
+                }
+            } catch (e) {
+                console.warn('Failed to fetch detailed author info from first video, using defaults');
+            }
+        }
+
+        const data = {
+            title: channelName,
+            thumbnail: channelAvatar || (pl.thumbnail ? pl.thumbnail.url : null),
+            banner: channelBanner || null,
+            subscriberCount: subscriberCount,
+            items: videos.slice(0, 50).map(item => ({
+                id: item.id,
+                title: item.title,
+                artist: channelName,
+                duration: item.durationInSec || 0,
+                durationText: item.durationRaw || '0:00',
+                thumbnail: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`,
+                isLive: item.isLive || item.durationInSec === 0,
+                uploaderId: actualChannelId,
+                uploaderUrl: `https://www.youtube.com/channel/${actualChannelId}`
+            }))
+        };
+
+        setCache(cacheKey, data);
+        return data;
+    } catch (e) {
+        console.error('handleChannel error:', e);
+        throw new Error('Không thể tải dữ liệu kênh hoặc ID không hợp lệ');
     }
 }
 
@@ -328,14 +439,24 @@ async function handleApiRequest(req, res, parsedUrl) {
             data = await handlePlaylist(url);
             console.log(`[API] Fetch Playlist → ${data.title} (${data.items.length} items)`);
 
+        } else if (pathname === '/api/channel') {
+            const channelId = params.id || '';
+            if (!channelId) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'Missing id parameter' }));
+                return;
+            }
+            data = await handleChannel(channelId);
+            console.log(`[API] Fetch Channel → ${data.title} (${data.items.length} items)`);
+
         } else {
             res.writeHead(404);
             res.end(JSON.stringify({ error: 'Not found' }));
             return;
         }
 
-        res.writeHead(200);
-        res.end(JSON.stringify(data));
+        const jsonBody = JSON.stringify(data);
+        sendCompressed(req, res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Connection': 'keep-alive' }, Buffer.from(jsonBody));
 
     } catch (e) {
         console.error(`[API ERROR] ${pathname}:`, e.message);
@@ -374,15 +495,24 @@ function handleStaticFile(req, res, parsedUrl) {
         }
 
         let cacheControl = 'no-cache';
-        if (ext === '.css' || ext === '.js' || ext === '.jpg' || ext === '.png' || ext === '.svg' || ext === '.json' || ext === '.woff2') {
-            cacheControl = 'public, max-age=604800'; // Cache cho 7 ngày
+        if (ext === '.jpg' || ext === '.png' || ext === '.svg' || ext === '.woff2') {
+            cacheControl = 'public, max-age=604800'; // Cache for 7 days
         }
 
-        res.writeHead(200, { 
+        const headers = { 
             'Content-Type': contentType,
-            'Cache-Control': cacheControl 
-        });
-        res.end(data);
+            'Cache-Control': cacheControl,
+            'Connection': 'keep-alive'
+        };
+
+        // Compress text-based files (HTML, CSS, JS, JSON, SVG)
+        const compressible = ['.html', '.css', '.js', '.json', '.svg'];
+        if (compressible.includes(ext)) {
+            sendCompressed(req, res, 200, headers, data);
+        } else {
+            res.writeHead(200, headers);
+            res.end(data);
+        }
     });
 }
 
