@@ -2876,3 +2876,53 @@ body.tv-mode .time-display {
     outline: 3px solid var(--text-primary);
     box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
 }
+
+/* ===== TOGGLE SWITCH ===== */
+.switch {
+    display: inline-block;
+    height: 24px;
+    position: relative;
+    width: 44px;
+}
+
+.switch input {
+    display: none;
+}
+
+.slider {
+    background-color: var(--bg-hover);
+    bottom: 0;
+    cursor: pointer;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transition: 0.4s;
+}
+
+.slider:before {
+    background-color: var(--text-primary);
+    bottom: 4px;
+    content: "";
+    height: 16px;
+    left: 4px;
+    position: absolute;
+    transition: 0.4s;
+    width: 16px;
+}
+
+input:checked + .slider {
+    background-color: var(--accent);
+}
+
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+.slider.round {
+    border-radius: 24px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}

@@ -8,6 +8,43 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const zlib = require('zlib');
+const DiscordRPC = require('discord-rpc');
+
+// Discord RPC Configuration
+const DISCORD_CLIENT_ID = '1216346215017254952'; // Generic Music Client ID
+let rpcClient = null;
+let rpcReady = false;
+
+function initDiscordRPC() {
+    if (rpcClient) return;
+    
+    rpcClient = new DiscordRPC.Client({ transport: 'ipc' });
+    
+    rpcClient.on('ready', () => {
+        console.log('[DISCORD] Rich Presence is ready');
+        rpcReady = true;
+    });
+
+    rpcClient.on('disconnected', () => {
+        console.log('[DISCORD] Disconnected. Reconnecting in 15s...');
+        rpcReady = false;
+        rpcClient = null;
+        setTimeout(initDiscordRPC, 15000);
+    });
+
+    rpcClient.login({ clientId: DISCORD_CLIENT_ID }).catch(err => {
+        console.warn('[DISCORD] Failed to connect to Discord RPC. Is Discord open?');
+        rpcClient = null;
+        rpcReady = false;
+        // Try again in 30s
+        setTimeout(initDiscordRPC, 30000);
+    });
+}
+
+// Start Discord RPC attempt
+if (!process.env.VERCEL) {
+    initDiscordRPC();
+}
 
 // Gzip helper: compress response if client supports it
 function sendCompressed(req, res, statusCode, headers, body) {
@@ -449,7 +486,36 @@ async function handleApiRequest(req, res, parsedUrl) {
             data = await handleChannel(channelId);
             console.log(`[API] Fetch Channel → ${data.title} (${data.items.length} items)`);
 
-        } else {
+        } else if (pathname === '/api/discord/presence') {
+            if (!rpcReady || !rpcClient) {
+                res.writeHead(503);
+                res.end(JSON.stringify({ error: 'Discord RPC not ready' }));
+                return;
+            }
+
+            const { details, state, largeImageKey, startTimestamp, endTimestamp, type } = params;
+            
+            try {
+                if (type === 'clear') {
+                    await rpcClient.clearActivity();
+                } else {
+                    await rpcClient.setActivity({
+                        details: details || 'Đang nghe nhạc',
+                        state: state || 'CocaTube',
+                        largeImageKey: largeImageKey || 'logo',
+                        largeImageText: 'CocaTube Music',
+                        smallImageKey: 'play',
+                        smallImageText: 'Playing',
+                        startTimestamp: startTimestamp ? parseInt(startTimestamp) : undefined,
+                        endTimestamp: endTimestamp ? parseInt(endTimestamp) : undefined,
+                        instance: false,
+                    });
+                }
+                data = { success: true };
+            } catch (rpcErr) {
+                console.error('[DISCORD] RPC error:', rpcErr.message);
+                throw rpcErr;
+            }
             res.writeHead(404);
             res.end(JSON.stringify({ error: 'Not found' }));
             return;

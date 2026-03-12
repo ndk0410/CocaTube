@@ -298,6 +298,9 @@ const App = (() => {
         dom.closeLoginModal = $('close-login-modal');
         dom.googleLoginBtn = $('google-login-btn');
 
+        // Settings
+        dom.discordRpcToggle = $('discord-rpc-toggle');
+
         // Toast
         dom.toastContainer = $('toast-container');
     }
@@ -311,6 +314,7 @@ const App = (() => {
             },
             onStateChange: (state) => {
                 updatePlayButton(state.playing);
+                syncDiscordPresence(state.track, state.playing);
             },
             onTrackChange: (track) => {
                 updatePlayerUI(track);
@@ -318,9 +322,8 @@ const App = (() => {
 
                 // Fetch related for auto-play
                 loadRelated(track.id);
-
-                // Mute URL updating to keep address bar clean
-                // The URL will remain http://localhost:3000/ unless explicitly linked
+                
+                syncDiscordPresence(track, true);
             },
             onTimeUpdate: (time) => {
                 updateTimeUI(time);
@@ -599,6 +602,16 @@ const App = (() => {
             });
         }
 
+        // Discord RPC Toggle
+        if (dom.discordRpcToggle) {
+            dom.discordRpcToggle.addEventListener('change', () => {
+                localStorage.setItem('coca_discord_rpc', dom.discordRpcToggle.checked);
+                if (!dom.discordRpcToggle.checked) {
+                    MusicAPI.updateDiscordPresence({ type: 'clear' });
+                }
+            });
+        }
+
         // Restore saved preferences immediately
         const savedTheme = localStorage.getItem('coca_theme') || 'dark';
         setTheme(savedTheme, false);
@@ -610,6 +623,9 @@ const App = (() => {
         const savedLang = localStorage.getItem('coca_lang') || 'vi';
         if (langSelect) langSelect.value = savedLang;
         setLanguage(savedLang);
+
+        const savedDiscordRpc = localStorage.getItem('coca_discord_rpc') !== 'false'; // Default to true
+        if (dom.discordRpcToggle) dom.discordRpcToggle.checked = savedDiscordRpc;
 
         // Initialize Firebase Auth Listener
         initAuth();
@@ -644,6 +660,31 @@ const App = (() => {
             window.MusicPlayer.setVideoMode(isVideo);
         }
     }
+
+    // ===== DISCORD RPC =====
+
+    function syncDiscordPresence(track, isPlaying) {
+        const isEnabled = localStorage.getItem('coca_discord_rpc') !== 'false';
+        if (!isEnabled || !track) return;
+
+        if (!isPlaying) {
+            MusicAPI.updateDiscordPresence({ type: 'clear' });
+            return;
+        }
+
+        const currentTime = Math.floor(MusicPlayer.getCurrentTime()) || 0;
+        const duration = track.duration || 0;
+        const now = Math.floor(Date.now() / 1000);
+        
+        MusicAPI.updateDiscordPresence({
+            details: track.title,
+            state: track.artist,
+            largeImageKey: track.thumbnail || 'logo',
+            startTimestamp: now - currentTime,
+            endTimestamp: duration > 0 ? (now - currentTime + duration) : undefined
+        });
+    }
+
 
     // Callback from player.js when auto-switching modes (e.g., screen off)
     // Only update UI, do NOT call MusicPlayer.setVideoMode to avoid circular loop
