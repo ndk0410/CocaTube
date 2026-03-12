@@ -11,32 +11,36 @@ const zlib = require('zlib');
 const DiscordRPC = require('discord-rpc');
 
 // Discord RPC Configuration
-const DISCORD_CLIENT_ID = '1216346215017254952'; // Generic Music Client ID
+const DISCORD_CLIENT_ID = '1481699680239751192'; // User's CocaTube Discord App
 let rpcClient = null;
 let rpcReady = false;
 
 function initDiscordRPC() {
     if (rpcClient) return;
     
+    console.log('[DISCORD] Connecting...');
     rpcClient = new DiscordRPC.Client({ transport: 'ipc' });
     
     rpcClient.on('ready', () => {
-        console.log('[DISCORD] Rich Presence is ready');
+        console.log('[DISCORD] Connected! Ready to sync presence.');
         rpcReady = true;
     });
 
     rpcClient.on('disconnected', () => {
-        console.log('[DISCORD] Disconnected. Reconnecting in 15s...');
+        console.warn('[DISCORD] Disconnected.');
         rpcReady = false;
         rpcClient = null;
         setTimeout(initDiscordRPC, 15000);
     });
 
+    rpcClient.on('error', (err) => {
+        console.error('[DISCORD] Error:', err.message);
+    });
+
     rpcClient.login({ clientId: DISCORD_CLIENT_ID }).catch(err => {
-        console.warn('[DISCORD] Failed to connect to Discord RPC. Is Discord open?');
+        console.warn(`[DISCORD] Login failed: ${err.message}`);
         rpcClient = null;
         rpcReady = false;
-        // Try again in 30s
         setTimeout(initDiscordRPC, 30000);
     });
 }
@@ -433,7 +437,7 @@ async function handleApiRequest(req, res, parsedUrl) {
             console.error(`[STREAM ERROR] ${videoId}:`, err.message);
             if (!res.headersSent) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: err.message }));
+                res.end(JSON.stringify({ error: `Stream error: ${err.message}` }));
             }
         }
         return;
@@ -488,6 +492,7 @@ async function handleApiRequest(req, res, parsedUrl) {
 
         } else if (pathname === '/api/discord/presence') {
             if (!rpcReady || !rpcClient) {
+                console.log('[DISCORD] API call received but RPC not ready');
                 res.writeHead(503);
                 res.end(JSON.stringify({ error: 'Discord RPC not ready' }));
                 return;
@@ -505,19 +510,23 @@ async function handleApiRequest(req, res, parsedUrl) {
                         largeImageKey: largeImageKey || 'logo',
                         largeImageText: 'CocaTube Music',
                         smallImageKey: 'play',
-                        smallImageText: 'Playing',
+                        smallImageText: 'Listening',
                         startTimestamp: startTimestamp ? parseInt(startTimestamp) : undefined,
                         endTimestamp: endTimestamp ? parseInt(endTimestamp) : undefined,
                         instance: false,
+                        type: 2, // 2 = Listening (like Spotify)
                     });
                 }
                 data = { success: true };
             } catch (rpcErr) {
                 console.error('[DISCORD] RPC error:', rpcErr.message);
-                throw rpcErr;
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: rpcErr.message }));
+                return;
             }
-            res.writeHead(404);
-            res.end(JSON.stringify({ error: 'Not found' }));
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data));
             return;
         }
 

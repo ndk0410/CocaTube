@@ -245,6 +245,7 @@ const MusicAPI = (() => {
         formatViews,
         extractVideoId,
         importPlaylist,
-        getChannel
+        getChannel,
+        updateDiscordPresence
     };
 })();

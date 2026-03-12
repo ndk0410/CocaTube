@@ -9,6 +9,9 @@ const App = (() => {
     const dom = {};
 
     // ===== STATE =====
+    let currentCategory = 'all';
+    let isPlayingContextPlaylist = false; // Flag to prevent auto-suggestions when playing a custom playlist
+    let contextMenuEl = null; // Reference to active context menu
     let currentPageParams = null; // Track current page parameters (e.g., playlistId)
     let unsubscribeSnapshot = null; // Store Firestore real-time listener for user doc
     let unsubscribePlaylists = null; // Store Firestore real-time listener for playlists collection
@@ -668,6 +671,7 @@ const App = (() => {
         if (!isEnabled || !track) return;
 
         if (!isPlaying) {
+            console.log('[DISCORD] Clearing presence');
             MusicAPI.updateDiscordPresence({ type: 'clear' });
             return;
         }
@@ -675,6 +679,8 @@ const App = (() => {
         const currentTime = Math.floor(MusicPlayer.getCurrentTime()) || 0;
         const duration = track.duration || 0;
         const now = Math.floor(Date.now() / 1000);
+        
+        console.log(`[DISCORD] Syncing: ${track.title} (${isPlaying ? 'Playing' : 'Paused'})`);
         
         MusicAPI.updateDiscordPresence({
             details: track.title,
@@ -1967,10 +1973,16 @@ const App = (() => {
     }
 
     function updatePlayButton(playing) {
+        if (!dom.playBtn || !dom.fsPlayBtn) return;
         const icon = playing ? 'pause' : 'play_arrow';
-        dom.playBtn.querySelector('.material-icons-round').textContent = icon;
-        dom.fsPlayBtn.querySelector('.material-icons-round').textContent = icon;
-        dom.playerEqualizer.classList.toggle('active', playing);
+        
+        const playBtnIcon = dom.playBtn.querySelector('.material-icons-round');
+        if (playBtnIcon) playBtnIcon.textContent = icon;
+        
+        const fsPlayBtnIcon = dom.fsPlayBtn.querySelector('.material-icons-round');
+        if (fsPlayBtnIcon) fsPlayBtnIcon.textContent = icon;
+        
+        if (dom.playerEqualizer) dom.playerEqualizer.classList.toggle('active', playing);
     }
 
     function updateTimeUI(time) {
