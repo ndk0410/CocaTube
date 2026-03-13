@@ -8,7 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const zlib = require('zlib');
-const DiscordRPC = require('discord-rpc');
+let DiscordRPC;
+try { DiscordRPC = require('discord-rpc'); } catch (e) { DiscordRPC = null; }
 
 // Discord RPC Configuration
 const DISCORD_CLIENT_ID = '1481699680239751192'; // User's CocaTube Discord App
@@ -16,6 +17,7 @@ let rpcClient = null;
 let rpcReady = false;
 
 function initDiscordRPC() {
+    if (!DiscordRPC) return;
     if (rpcClient) return;
     
     console.log('[DISCORD] Connecting...');

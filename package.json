@@ -12,6 +12,7 @@
   "build": {
     "appId": "com.cocatube.music",
     "productName": "CocaTube",
+    "asar": false,
     "directories": {
       "output": "dist"
     },
@@ -20,7 +21,10 @@
       "!dist/**",
       "!tmp/**",
       "!.git/**",
-      "!.gemini/**"
+      "!.gemini/**",
+      "!node_modules/.cache/**",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**"
     ],
     "win": {
       "target": "nsis"
@@ -37,14 +41,14 @@
   "type": "commonjs",
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
-    "discord-rpc": "^4.0.1",
-    "firebase": "^12.10.0",
     "play-dl": "^1.9.7",
     "ytpl": "^2.3.0",
     "ytsr": "^3.8.4"
   },
   "devDependencies": {
+    "discord-rpc": "^4.0.1",
     "electron": "^35.2.1",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "firebase": "^12.10.0"
   }
 }
