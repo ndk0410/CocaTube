@@ -1,14 +1,38 @@
 {
-  "name": "music",
+  "name": "cocatube",
   "version": "1.0.0",
-  "description": "",
-  "main": "api.js",
+  "description": "CocaTube Music Player",
+  "main": "electron/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "desktop": "electron .",
+    "build:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.cocatube.music",
+    "productName": "CocaTube",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!tmp/**",
+      "!.git/**",
+      "!.gemini/**"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
+    }
   },
   "keywords": [],
-  "author": "",
+  "author": "ndk0410",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
@@ -18,5 +42,9 @@
     "play-dl": "^1.9.7",
     "ytpl": "^2.3.0",
     "ytsr": "^3.8.4"
+  },
+  "devDependencies": {
+    "electron": "^35.2.1",
+    "electron-builder": "^25.1.8"
   }
 }

@@ -216,6 +216,16 @@ const MusicAPI = (() => {
     }
 
     async function updateDiscordPresence(data) {
+        // Use Electron IPC if available (desktop app)
+        if (window.electronAPI && window.electronAPI.isElectron) {
+            try {
+                return await window.electronAPI.updateDiscordPresence(data);
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // Fallback to HTTP endpoint (localhost server)
         try {
             const params = new URLSearchParams();
             for (const key in data) {
@@ -223,7 +233,6 @@ const MusicAPI = (() => {
                     params.append(key, data[key]);
                 }
             }
-            // Use no-cache to ensure updates are sent even if URL is similar
             const res = await fetch(`${API_BASE}/discord/presence?${params.toString()}`, { cache: 'no-store' });
             return res.ok;
         } catch (e) {
