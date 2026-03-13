@@ -1,9 +1,15 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require('electron');
 const path = require('path');
+const http = require('http');
 const DiscordRPC = require('discord-rpc');
 
-// ===== DISCORD RPC =====
+// ===== CONSTANTS =====
 const DISCORD_CLIENT_ID = '1481699680239751192';
+const LOCAL_URL = 'http://localhost:3000';
+const VERCEL_URL = 'https://coca-tube.vercel.app'; // Fallback to web version
+const SERVER_PATH = path.join(__dirname, '..', 'server.js');
+
+// ===== DISCORD RPC =====
 let rpcClient = null;
 let rpcReady = false;
 
@@ -32,23 +38,42 @@ function initDiscordRPC() {
 }
 
 // ===== EMBEDDED SERVER =====
-let serverProcess = null;
-
 function startEmbeddedServer() {
     try {
-        // Import and run the server directly
-        require(path.join(__dirname, '..', 'server.js'));
+        require(SERVER_PATH);
         console.log('[ELECTRON] Embedded server started');
+        return true;
     } catch (err) {
         console.error('[ELECTRON] Failed to start server:', err.message);
+        return false;
     }
+}
+
+// Check if local server is responding
+function waitForServer(url, maxRetries = 15) {
+    return new Promise((resolve) => {
+        let retries = 0;
+        const check = () => {
+            http.get(url, (res) => {
+                resolve(true);
+            }).on('error', () => {
+                retries++;
+                if (retries >= maxRetries) {
+                    resolve(false);
+                } else {
+                    setTimeout(check, 500);
+                }
+            });
+        };
+        check();
+    });
 }
 
 // ===== ELECTRON WINDOW =====
 let mainWindow = null;
 let tray = null;
 
-function createWindow() {
+function createWindow(loadUrl) {
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
@@ -58,15 +83,30 @@ function createWindow() {
         icon: path.join(__dirname, '..', 'logo.png'),
         autoHideMenuBar: true,
         backgroundColor: '#0a0a0a',
+        show: false, // Don't show until ready
+        titleBarStyle: 'default',
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
+            webSecurity: true,
         }
     });
 
-    // Load the local server
-    mainWindow.loadURL('http://localhost:3000');
+    // Load the URL
+    mainWindow.loadURL(loadUrl);
+
+    // Show window when ready (no white flash)
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
+        mainWindow.focus();
+    });
+
+    // Open external links in default browser
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        if (url.startsWith('http')) shell.openExternal(url);
+        return { action: 'deny' };
+    });
 
     // Minimize to tray instead of closing
     mainWindow.on('close', (e) => {
@@ -82,18 +122,30 @@ function createWindow() {
 }
 
 function createTray() {
-    const iconPath = path.join(__dirname, '..', 'logo.png');
-    tray = new Tray(iconPath);
+    try {
+        const iconPath = path.join(__dirname, '..', 'logo.png');
+        const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+        tray = new Tray(icon);
 
-    const contextMenu = Menu.buildFromTemplate([
-        { label: 'Mở CocaTube', click: () => mainWindow && mainWindow.show() },
-        { type: 'separator' },
-        { label: 'Thoát', click: () => { app.isQuitting = true; app.quit(); } }
-    ]);
+        const contextMenu = Menu.buildFromTemplate([
+            { label: '🎵 Mở CocaTube', click: () => mainWindow && mainWindow.show() },
+            { type: 'separator' },
+            { label: '🌐 Mở bản Web', click: () => shell.openExternal(VERCEL_URL) },
+            { type: 'separator' },
+            { label: '❌ Thoát', click: () => { app.isQuitting = true; app.quit(); } }
+        ]);
 
-    tray.setToolTip('CocaTube Music');
-    tray.setContextMenu(contextMenu);
-    tray.on('double-click', () => mainWindow && mainWindow.show());
+        tray.setToolTip('CocaTube Music');
+        tray.setContextMenu(contextMenu);
+        tray.on('double-click', () => {
+            if (mainWindow) {
+                mainWindow.show();
+                mainWindow.focus();
+            }
+        });
+    } catch (e) {
+        console.warn('[ELECTRON] Tray icon error:', e.message);
+    }
 }
 
 // ===== IPC HANDLERS (Discord RPC from renderer) =====
@@ -122,27 +174,39 @@ ipcMain.handle('discord:updatePresence', async (_, data) => {
     }
 });
 
+ipcMain.handle('discord:getStatus', () => {
+    return { ready: rpcReady };
+});
+
 // ===== APP LIFECYCLE =====
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    // Start embedded server
     startEmbeddedServer();
     initDiscordRPC();
 
     // Wait for server to be ready
-    setTimeout(() => {
-        createWindow();
-        createTray();
-    }, 2000);
+    console.log('[ELECTRON] Waiting for server...');
+    const serverReady = await waitForServer(LOCAL_URL);
+
+    let loadUrl;
+    if (serverReady) {
+        console.log('[ELECTRON] Local server ready!');
+        loadUrl = LOCAL_URL;
+    } else {
+        console.warn('[ELECTRON] Local server not available. Loading web version...');
+        loadUrl = VERCEL_URL;
+    }
+
+    createWindow(loadUrl);
+    createTray();
 });
 
 app.on('window-all-closed', () => {
-    // Don't quit on macOS
-    if (process.platform !== 'darwin') {
-        // Keep running in tray
-    }
+    // Keep running in tray on all platforms
 });
 
 app.on('activate', () => {
-    if (!mainWindow) createWindow();
+    if (!mainWindow) createWindow(LOCAL_URL);
     else mainWindow.show();
 });
 
@@ -152,3 +216,17 @@ app.on('before-quit', () => {
         try { rpcClient.destroy(); } catch (e) {}
     }
 });
+
+// Prevent multiple instances
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
