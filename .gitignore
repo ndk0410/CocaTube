@@ -3,3 +3,8 @@ node_modules
 .npm
 package-lock.json
 ytsr-dumps
+electron/
+dist/
+tmp/
+build-log.txt
+*.blockmap
